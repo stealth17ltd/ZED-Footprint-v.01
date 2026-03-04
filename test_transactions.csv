@@ -1,0 +1,16 @@
+Date,Supplier,Amount,Currency,Description,Category,Invoice,VAT
+2025-01-15,Office Depot Bulgaria,128.00,EUR,Офис консумативи - хартия и химикалки,Office Supplies,INV-001,25.60
+2025-01-18,Bulgaria Air,850.00,EUR,Самолетен билет до Берлин за конференция,Business Travel,INV-002,0.00
+2025-01-20,EVN Bulgaria,164.00,EUR,Месечна фактура за електричество,Electricity,INV-003,32.80
+2025-01-22,Dell Bulgaria EOOD,1200.00,EUR,3 броя лаптопи за нови служители,IT Equipment,INV-004,240.00
+2025-01-25,Grand Hotel Sofia,450.00,EUR,Настаняване за 3 нощувки,Hotels,INV-005,90.00
+2025-01-28,Amazon Web Services,180.00,EUR,Облачен хостинг услуги,IT Services,INV-006,0.00
+2025-02-01,Lukoil Bulgaria,77.00,EUR,Гориво за служебни автомобили,Fuel,INV-007,15.40
+2025-02-05,Microsoft 365,45.00,EUR,Подновяване на софтуерен лиценз,Software,INV-008,9.00
+2025-02-10,София Управление на отпадъци,41.00,EUR,Месечно сметосъбиране,Waste,INV-009,8.20
+2025-02-15,FedEx Bulgaria,120.00,EUR,Международна куриерска услуга,Logistics,INV-010,24.00
+2025-02-18,Vivacom,49.00,EUR,Интернет и телефонни услуги,Telecommunications,INV-011,9.80
+2025-02-20,Kaufland Bulgaria,92.00,EUR,Офис кетъринг и закуски,Food & Beverages,INV-012,18.40
+2025-02-22,София Градски Транспорт,23.00,EUR,Месечни транспортни карти,Transport,INV-013,4.60
+2025-02-25,Уникредит Булбанк,25.00,EUR,Банкови такси и комисионни,Financial Services,INV-014,0.00
+2025-03-01,Cleanex Sofia,61.50,EUR,Почистване на офис помещения,Cleaning,INV-015,12.30

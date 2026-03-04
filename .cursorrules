@@ -1,0 +1,773 @@
+# ZED Carbon Footprint Management System - Development Rules
+
+## Project Overview
+ZED Carbon Footprint is an AI-powered sustainability management platform for Bulgarian SMBs to calculate Scope 1 & 2 carbon emissions, generate reduction strategies, and produce compliance reports aligned with Bulgarian/EU CSRD regulations.
+
+## Technology Stack
+
+### Frontend
+- **Framework**: Next.js 14+ with App Router (React 18+)
+- **Styling**: Tailwind CSS with custom green/earth tone palette
+- **UI Components**: shadcn/ui components
+- **State Management**: React Context API + React Query for server state
+- **Charts**: Recharts for data visualization
+- **Forms**: React Hook Form + Zod validation
+- **Language**: Bulgarian (primary), English (future)
+
+### Backend
+- **Runtime**: Node.js with TypeScript
+- **Framework**: Next.js API Routes (serverless functions)
+- **Database**: Supabase (PostgreSQL) - Local development initially
+- **Authentication**: Supabase Auth
+- **File Storage**: Supabase Storage
+- **OCR**: Google Cloud Vision API (Phase 2)
+- **AI/ML**: OpenAI API for strategy generation (Phase 2)
+
+### Database & Security
+- **Database**: PostgreSQL via Supabase
+- **Row Level Security (RLS)**: Enabled for all tables
+- **Authentication**: Supabase Auth with email/password
+- **Encryption**: SSL/TLS in transit, AES-256 at rest
+- **GDPR**: Full compliance required
+
+## Design Principles
+
+### Visual Design
+- **Color Palette**:
+  - Primary: Earth green (#2D5016, #4A7729)
+  - Secondary: Light green (#8BC34A, #C5E1A5)
+  - Accents: Natural brown (#6D4C41)
+  - Neutral: White, light gray (#F5F5F5)
+  - Alerts: Amber (#FFA726), Red (#E53935)
+  - Success: Deep green (#388E3C)
+- **Typography**: Sans-serif (Inter or Open Sans), minimum 14px body text
+- **Icons**: Lucide React icons, green accents
+- **Accessibility**: WCAG 2.1 AA compliance, 4.5:1 contrast ratio
+
+### UI/UX Standards
+- Clean, minimalist design with earth tones
+- Responsive design (mobile-first approach)
+- Bulgarian language interface
+- Contextual tooltips throughout ("?" icons)
+- Breadcrumb navigation for deep pages
+- Loading states for all async operations
+- Error handling with user-friendly Bulgarian messages
+- Success confirmations with appropriate feedback
+
+### Layout Structure
+- Top navigation: Logo, Company Name, User Profile, Notifications, Logout
+- Left sidebar: Dashboard, Add Data, Reports, Strategies, Settings, Help
+- Main content area: Page-specific content
+- Responsive: Collapsible sidebar on mobile (hamburger menu)
+
+## Code Standards
+
+### File Organization
+```
+app/
+├── (auth)/
+│   ├── login/
+│   └── register/
+├── (dashboard)/
+│   ├── dashboard/
+│   ├── data-entry/
+│   ├── reports/
+│   ├── strategies/
+│   └── settings/
+├── api/
+│   ├── emissions/
+│   ├── strategies/
+│   ├── reports/
+│   └── calculations/
+├── components/
+│   ├── ui/ (shadcn components)
+│   ├── dashboard/
+│   ├── forms/
+│   ├── charts/
+│   └── layout/
+├── lib/
+│   ├── supabase/
+│   ├── calculations/
+│   ├── emissions/
+│   └── utils/
+└── types/
+```
+
+### Naming Conventions
+- **Files**: kebab-case (e.g., `emission-calculator.ts`)
+- **Components**: PascalCase (e.g., `DashboardCard.tsx`)
+- **Functions**: camelCase (e.g., `calculateEmissions`)
+- **Types/Interfaces**: PascalCase (e.g., `EmissionData`)
+- **Constants**: UPPER_SNAKE_CASE (e.g., `EMISSION_FACTORS`)
+- **Database tables**: snake_case (e.g., `emission_data`)
+
+### TypeScript Standards
+- **Always use TypeScript** - No JavaScript files
+- **Strict mode enabled** - All type checking
+- **Type everything** - No `any` types without justification
+- **Interfaces over types** for object shapes
+- **Enums** for fixed sets of values
+- **Zod schemas** for runtime validation
+
+### Component Standards
+- **Server Components by default** (Next.js App Router)
+- **"use client"** only when necessary (interactivity, hooks, browser APIs)
+- **Extract reusable logic** into custom hooks
+- **Keep components small** - Single responsibility
+- **Props destructuring** in function signature
+- **Named exports** for components
+
+### Database Standards
+- **RLS policies** on all tables (company_id isolation)
+- **Use service role** only in API routes when needed
+- **User role access** for frontend queries
+- **Proper indexes** on foreign keys and frequently queried columns
+- **Timestamps**: created_at, updated_at on all tables
+- **Soft deletes**: Use is_active/deleted_at instead of hard deletes
+
+## Bulgarian Language Implementation
+
+### Text Management
+- Store all UI text in `lib/i18n/bg.ts`
+- Use translation helper functions
+- Bulgarian is primary language
+- All form labels, buttons, messages in Bulgarian
+- Error messages in Bulgarian with clear explanations
+- Admin comments and documentation in English
+
+### Bulgarian Terminology
+- "Сертификационен орган" (not "Сертификационно тяло")
+- "Въглероден отпечатък" for Carbon Footprint
+- "Обхват 1" / "Обхват 2" for Scope 1/2
+- "tCO2e" (technical term, no translation)
+- Follow PRD terminology standards
+
+## Core Feature Requirements
+
+### 1. Authentication & Authorization
+- **Roles**: Admin (ZED team), Client (company users)
+- **Admin capabilities**: Create companies, manage users, view all data
+- **Client capabilities**: Access own company data only
+- **Security**: Password complexity, session management, secure password recovery
+- **RLS**: Enforce company_id isolation at database level
+
+### 2. Company Master Data
+```typescript
+interface Company {
+  id: string;
+  company_name: string;
+  registration_number: string;
+  industry_sector: string;
+  employee_count: number;
+  location_count: number;
+  primary_contact_email: string;
+  billing_address: string;
+  logo_url?: string;
+  sustainability_goals?: string;
+  eu_green_deal_commitment: boolean;
+  baseline_year: number;
+  created_at: Date;
+  updated_at: Date;
+}
+```
+
+### 3. Emissions Data Collection
+- **Scope 1**: Vehicles (fuel type, consumption), On-site fuel, Refrigerants
+- **Scope 2**: Electricity (kWh), District heating/cooling
+- **Input methods**: Manual forms, Excel/CSV import (MVP), PDF OCR (Phase 2)
+- **Validation**: Range checks, period-over-period alerts, mandatory explanations for outliers
+- **Multi-location support**: Single location for MVP, multi-location in Phase 2
+
+### 4. Carbon Footprint Calculation Engine
+```typescript
+// Formula: Total CO2e = Σ(Activity Data × Emission Factor × GWP)
+interface EmissionCalculation {
+  activity_value: number;
+  unit: string;
+  emission_factor: number;
+  gwp_factor: number; // For refrigerants
+  calculated_co2e: number;
+}
+```
+- Bulgarian/EU emission factors (stored in database)
+- GHG Protocol Scope 1 & 2 compliant
+- Annual emission factor updates
+- Calculation transparency (show factors used)
+
+### 5. Dashboard & Visualizations
+- **Hero section**: Total footprint, trend indicator, progress to target
+- **Action items**: Pending entries, deadlines, recommendations
+- **Trend graph**: 12-month line chart (Scope 1 & 2)
+- **Breakdown charts**: Donut (Scope 1 vs 2), Bar (by category)
+- **Strategy progress**: Active initiatives with progress bars
+- Use Recharts with earth-tone color palette
+
+### 6. AI Strategy Generation
+- **Analysis**: Identify hotspots, detect inefficiencies, compare to benchmarks
+- **Recommendations**: Prioritized by impact (high/medium/low)
+- **Categories**: Energy efficiency, renewables, fleet optimization, behavioral changes
+- **Tracking**: Planned, In Progress, Completed, Not Applicable
+- **Community sharing**: Anonymous success stories
+
+### 7. Reporting System
+- **Compliance Reports**: CSRD-aligned, methodology statement, audit trail
+- **Internal Reports**: Monthly/quarterly summaries, year-over-year comparisons
+- **Stakeholder Reports**: Executive summaries, sustainability certificates
+- **Formats**: PDF (primary), Excel, CSV
+- **Generation time**: <30 seconds
+
+### 8. Educational Features
+- Contextual tooltips throughout ("?" icons)
+- Bulgarian/EU regulatory guidance
+- First-time user onboarding wizard
+- Best practices library
+- Plain-language explanations
+
+## API Route Standards
+
+### Structure
+```typescript
+// app/api/emissions/route.ts
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const companyId = searchParams.get('company_id');
+    
+    // Validate input
+    if (!companyId) {
+      return NextResponse.json(
+        { error: 'Company ID is required' },
+        { status: 400 }
+      );
+    }
+    
+    // Query with RLS (use user auth)
+    const { data, error } = await supabase
+      .from('emission_data')
+      .select('*')
+      .eq('company_id', companyId);
+    
+    if (error) throw error;
+    
+    return NextResponse.json({ data });
+  } catch (error) {
+    console.error('Error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+```
+
+### Standards
+- **Validate all inputs** using Zod schemas
+- **Use RLS** - Prefer user auth context
+- **Service role** only when necessary (admin operations)
+- **Error handling**: Try-catch with proper HTTP status codes
+- **Logging**: Console.error for debugging
+- **Return consistent** JSON structure
+- **Rate limiting**: Consider for production
+
+## Database Schema Standards
+
+### Core Tables
+
+#### users
+```sql
+CREATE TABLE users (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  company_id UUID REFERENCES companies(id),
+  email TEXT UNIQUE NOT NULL,
+  first_name TEXT NOT NULL,
+  last_name TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('admin', 'client')),
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+#### companies
+```sql
+CREATE TABLE companies (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  company_name TEXT NOT NULL,
+  registration_number TEXT UNIQUE NOT NULL,
+  industry_sector TEXT NOT NULL,
+  employee_count INTEGER,
+  location_count INTEGER DEFAULT 1,
+  sustainability_goals TEXT,
+  eu_green_deal_commitment BOOLEAN DEFAULT false,
+  baseline_year INTEGER,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+#### emission_data
+```sql
+CREATE TABLE emission_data (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  company_id UUID REFERENCES companies(id) NOT NULL,
+  location_id UUID REFERENCES locations(id),
+  reporting_period DATE NOT NULL,
+  scope INTEGER NOT NULL CHECK (scope IN (1, 2)),
+  category TEXT NOT NULL,
+  activity_value NUMERIC NOT NULL,
+  unit TEXT NOT NULL,
+  emission_factor NUMERIC NOT NULL,
+  calculated_co2e NUMERIC NOT NULL,
+  data_source TEXT CHECK (data_source IN ('manual', 'import', 'ocr', 'api')),
+  validation_status TEXT DEFAULT 'validated',
+  notes TEXT,
+  uploaded_by UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+#### strategies
+```sql
+CREATE TABLE strategies (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  company_id UUID REFERENCES companies(id) NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  category TEXT NOT NULL,
+  estimated_reduction_co2e NUMERIC,
+  status TEXT DEFAULT 'recommended' CHECK (status IN ('recommended', 'planned', 'in_progress', 'completed', 'not_applicable')),
+  start_date DATE,
+  target_completion_date DATE,
+  actual_completion_date DATE,
+  actual_reduction_co2e NUMERIC,
+  is_shared_community BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+#### emission_factors
+```sql
+CREATE TABLE emission_factors (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  category TEXT NOT NULL,
+  subcategory TEXT,
+  region TEXT DEFAULT 'Bulgaria',
+  value NUMERIC NOT NULL,
+  unit TEXT NOT NULL,
+  source TEXT,
+  effective_date DATE NOT NULL,
+  expiry_date DATE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### RLS Policies Template
+```sql
+-- Enable RLS
+ALTER TABLE emission_data ENABLE ROW LEVEL SECURITY;
+
+-- Clients can only see their company's data
+CREATE POLICY "Users can view own company data" ON emission_data
+  FOR SELECT
+  USING (
+    company_id IN (
+      SELECT company_id FROM users WHERE id = auth.uid()
+    )
+  );
+
+-- Admins can see all data
+CREATE POLICY "Admins can view all data" ON emission_data
+  FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM users 
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+```
+
+## Calculation Engine Standards
+
+### Emission Calculation Function
+```typescript
+export function calculateEmissions(params: {
+  activityValue: number;
+  emissionFactor: number;
+  gwpFactor?: number;
+}): number {
+  const { activityValue, emissionFactor, gwpFactor = 1 } = params;
+  
+  // Formula: CO2e = Activity × Emission Factor × GWP
+  const result = activityValue * emissionFactor * gwpFactor;
+  
+  // Round to 2 decimal places
+  return Math.round(result * 100) / 100;
+}
+```
+
+### Validation Rules
+```typescript
+export function validateEmissionData(data: EmissionDataInput): ValidationResult {
+  const warnings: string[] = [];
+  const errors: string[] = [];
+  
+  // Range checks
+  if (data.activityValue < 0) {
+    errors.push('Activity value cannot be negative');
+  }
+  
+  // Period-over-period comparison (if previous data exists)
+  if (previousData) {
+    const changePercent = Math.abs(
+      (data.activityValue - previousData.activityValue) / previousData.activityValue * 100
+    );
+    
+    if (changePercent > 30) {
+      warnings.push(`Data differs by ${changePercent.toFixed(1)}% from previous period. Please provide explanation.`);
+    }
+  }
+  
+  return { valid: errors.length === 0, warnings, errors };
+}
+```
+
+## Testing Standards
+
+### Unit Tests
+- **Test all calculations** with known inputs/outputs
+- **Test validation logic** with edge cases
+- **Test API routes** with mock Supabase
+- Use Jest + React Testing Library
+
+### Integration Tests
+- **Test complete workflows**: Data entry → Calculation → Display
+- **Test RLS policies**: Ensure data isolation
+- **Test authentication flows**
+
+### Bulgarian Language Testing
+- Verify all UI text displays correctly
+- Test form validation messages in Bulgarian
+- Ensure proper character encoding (UTF-8)
+
+## Performance Standards
+
+### Response Times
+- Page load: <2 seconds
+- API responses: <1 second
+- Report generation: <30 seconds
+- Dashboard refresh: <3 seconds
+
+### Optimization
+- Use React Server Components for static content
+- Implement loading states for async operations
+- Lazy load charts and heavy components
+- Cache emission factors (Redis future)
+- Optimize database queries with proper indexes
+
+## Error Handling
+
+### Frontend
+```typescript
+try {
+  const response = await fetch('/api/emissions');
+  if (!response.ok) throw new Error('Failed to fetch');
+  const data = await response.json();
+  return data;
+} catch (error) {
+  console.error('Error fetching emissions:', error);
+  toast.error('Възникна грешка при зареждане на данните'); // Bulgarian error
+  return null;
+}
+```
+
+### Backend
+- Return appropriate HTTP status codes
+- Provide clear error messages
+- Log errors with context
+- Never expose sensitive information in errors
+
+## Security Checklist
+
+- [ ] All routes protected with authentication
+- [ ] RLS policies on all tables
+- [ ] Input validation on all forms
+- [ ] SQL injection prevention (use parameterized queries)
+- [ ] XSS prevention (React escapes by default)
+- [ ] CSRF protection (Next.js built-in)
+- [ ] Secure password storage (Supabase handles)
+- [ ] HTTPS only in production
+- [ ] Environment variables for secrets
+- [ ] Rate limiting on API routes (future)
+
+## GDPR Compliance
+
+### Data Protection
+- **Consent**: User consent for data processing
+- **Right to access**: Export user data endpoint
+- **Right to erasure**: Soft delete + data anonymization
+- **Data portability**: Export in CSV/JSON
+- **Breach notification**: Incident response plan
+- **Privacy policy**: Bulgarian and English versions
+
+### Implementation
+```typescript
+// app/api/gdpr/export-data/route.ts
+export async function GET(request: Request) {
+  // Export all user's company data
+  // Return as downloadable JSON/CSV
+}
+
+// app/api/gdpr/delete-account/route.ts
+export async function DELETE(request: Request) {
+  // Soft delete user
+  // Anonymize emission data (keep for aggregated stats)
+  // Delete personal information
+}
+```
+
+## Development Workflow
+
+### Git Workflow
+- **Main branch**: Production-ready code
+- **Develop branch**: Integration branch
+- **Feature branches**: `feature/feature-name`
+- **Commit messages**: Conventional commits (feat, fix, docs, etc.)
+- **Pull requests**: Required for main/develop
+
+### Code Review Checklist
+- [ ] TypeScript types defined
+- [ ] RLS policies correct
+- [ ] Error handling implemented
+- [ ] Bulgarian text correct
+- [ ] Responsive design tested
+- [ ] Accessibility standards met
+- [ ] Performance acceptable
+- [ ] Tests passing
+
+### Deployment
+- **Environment**: Vercel (Next.js) + Supabase
+- **Staging**: Preview deployments for PRs
+- **Production**: Main branch auto-deploy
+- **Environment variables**: Set in Vercel/Supabase dashboard
+
+## Documentation Standards
+
+### Code Comments
+- JSDoc for all exported functions
+- Explain complex calculations
+- Reference PRD sections where applicable
+- Bulgarian comments for Bulgarian-specific logic
+
+### Example
+```typescript
+/**
+ * Calculates total CO2 emissions based on activity data and emission factors.
+ * Implements GHG Protocol Scope 1 & 2 methodology (PRD Section 3.4.1)
+ * 
+ * @param activityValue - Consumption amount (e.g., liters, kWh)
+ * @param emissionFactor - Bulgarian/EU emission factor (kgCO2e per unit)
+ * @param gwpFactor - Global Warming Potential (for refrigerants)
+ * @returns Calculated CO2e in metric tons
+ */
+export function calculateEmissions(
+  activityValue: number,
+  emissionFactor: number,
+  gwpFactor: number = 1
+): number {
+  return (activityValue * emissionFactor * gwpFactor) / 1000; // Convert kg to tons
+}
+```
+
+## AI Strategy Generation
+
+### OpenAI Integration
+```typescript
+import OpenAI from 'openai';
+
+export async function generateStrategies(params: {
+  emissionData: EmissionData[];
+  companyProfile: Company;
+  industryBenchmarks: Benchmark[];
+}): Promise<Strategy[]> {
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  
+  const prompt = `
+    Analyze the following carbon emission data for a Bulgarian ${params.companyProfile.industry_sector} company:
+    ${JSON.stringify(params.emissionData)}
+    
+    Industry benchmarks: ${JSON.stringify(params.industryBenchmarks)}
+    
+    Generate 3-5 specific, actionable emission reduction strategies in Bulgarian.
+    For each strategy, provide:
+    - Title (in Bulgarian)
+    - Description (in Bulgarian, 2-3 sentences)
+    - Estimated CO2e reduction per year
+    - Implementation timeframe (weeks/months)
+    - Complexity level (simple/moderate/complex)
+    
+    Focus on strategies realistic for Bulgarian SMBs.
+  `;
+  
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4',
+    messages: [{ role: 'user', content: prompt }],
+    temperature: 0.7,
+  });
+  
+  // Parse and structure the response
+  // Save to database
+  // Return strategies
+}
+```
+
+## MVP vs Future Phases
+
+### MVP (Phase 1) - Priority Features - CONFIRMED SCOPE
+✅ **MUST HAVE**:
+- User authentication (Admin + Client roles)
+- Company master data management (single location)
+- Manual data entry (Scope 1 & 2)
+- Excel/CSV template import
+- Calculation engine (Bulgarian/EU factors)
+- Main dashboard with visualizations
+- Compliance reports (PDF)
+- Bulgarian language interface
+- GDPR compliance
+- Contextual tooltips
+- Local development with Supabase
+- Service-based pricing model
+
+❌ **NOT IN MVP** (Deferred to Phase 2+):
+- PDF OCR processing (Phase 2 - using Google Cloud Vision API)
+- AI strategy generation (Phase 2 - using OpenAI API)
+- Multi-location support (Phase 2)
+- System integrations (Phase 3)
+- Scope 3 emissions (Future)
+- Mobile apps (Future)
+- Cloud deployment (Post-MVP)
+
+### When Building Features
+1. Check if feature is in MVP scope (PRD Section 6.1)
+2. If not in MVP, add TODO comment for future phase
+3. Build extensible architecture for future additions
+4. Document dependencies for future features
+
+## Common Patterns
+
+### Loading State
+```typescript
+'use client';
+
+export function DashboardCard() {
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState(null);
+  
+  useEffect(() => {
+    fetchData().then(d => {
+      setData(d);
+      setLoading(false);
+    });
+  }, []);
+  
+  if (loading) {
+    return <Skeleton className="h-24 w-full" />;
+  }
+  
+  return <div>{/* render data */}</div>;
+}
+```
+
+### Form Validation
+```typescript
+import { z } from 'zod';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+
+const emissionSchema = z.object({
+  activityValue: z.number().positive('Стойността трябва да е положителна'),
+  category: z.string().min(1, 'Изберете категория'),
+  reportingPeriod: z.date(),
+});
+
+export function EmissionForm() {
+  const form = useForm({
+    resolver: zodResolver(emissionSchema),
+  });
+  
+  // ... form implementation
+}
+```
+
+### Toast Notifications
+```typescript
+import { toast } from 'sonner';
+
+// Success
+toast.success('Данните са запазени успешно');
+
+// Error
+toast.error('Възникна грешка при запазване');
+
+// Warning
+toast.warning('Стойността е необичайна. Моля, проверете.');
+```
+
+## Questions to Ask Before Coding
+
+1. **Is this feature in MVP scope?** (Check PRD Section 6.1)
+2. **Does this need RLS?** (Yes, if user data)
+3. **Should this be a Server or Client Component?** (Server by default)
+4. **What's the Bulgarian translation?** (Check with product team)
+5. **How does this affect performance?** (Consider optimization)
+6. **Is this GDPR compliant?** (Personal data handling)
+7. **What validation is needed?** (Define Zod schema)
+8. **What's the error handling?** (User-friendly Bulgarian messages)
+
+## Useful Commands
+
+```bash
+# Development
+npm run dev
+
+# Build
+npm run build
+
+# Type checking
+npm run type-check
+
+# Linting
+npm run lint
+
+# Database migrations (Supabase)
+supabase db push
+
+# Generate TypeScript types from Supabase
+supabase gen types typescript --local > types/supabase.ts
+```
+
+## Resources
+
+- **PRD**: `zed_carbon_prd.md` (refer to specific sections)
+- **Design Mockups**: [To be created]
+- **API Documentation**: [To be created]
+- **Emission Factors**: [Bulgarian/EU official sources]
+- **GDPR Guidelines**: [EU official documentation]
+
+---
+
+## Remember
+
+🇧🇬 **Bulgarian first** - All user-facing text in Bulgarian  
+🔒 **Security always** - RLS on everything, validate all inputs  
+♿ **Accessibility matters** - WCAG 2.1 AA compliance  
+🌱 **Green design** - Earth tones, sustainability focus  
+📊 **Data transparency** - Show how calculations work  
+🎯 **MVP focus** - Build what's needed now, plan for future  
+🧪 **Test thoroughly** - Especially calculations and RLS  
+📖 **Document well** - Future developers will thank you
+
+---
+
+When in doubt, refer to the PRD (`zed_carbon_prd.md`) for detailed requirements.
