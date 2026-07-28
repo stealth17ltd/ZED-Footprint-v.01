@@ -43,7 +43,21 @@ import {
   Zap,
   ChevronDown,
   ChevronUp,
+  Sparkles,
+  ArrowRight,
+  ArrowLeft,
+  Pencil,
+  X,
+  Check,
+  BookOpen,
 } from 'lucide-react';
+import {
+  TARGET_TEMPLATES,
+  DIFFICULTY_LABELS,
+  DIFFICULTY_COLORS,
+  SCOPE_FILTER_OPTIONS,
+  type TargetTemplate,
+} from '@/lib/target-templates';
 import {
   LineChart,
   Line,
@@ -179,12 +193,585 @@ function KpiCard({ label, value, sub, color }: { label: string; value: string; s
   );
 }
 
+// ─── Target template types ────────────────────────────────────────────────
+
+interface TargetReviewItem {
+  templateId:     string;
+  name:           string;
+  description:    string;
+  target_type:    'absolute' | 'percentage' | 'intensity';
+  scope:          string;
+  baseline_year:  string;
+  baseline_value: string;
+  target_year:    string;
+  target_value:   string;
+  notes:          string;
+}
+
+function buildTargetReviewItem(template: TargetTemplate, currentYear: number): TargetReviewItem {
+  return {
+    templateId:     template.id,
+    name:           template.name,
+    description:    template.description,
+    target_type:    template.target_type,
+    scope:          template.scope?.toString() ?? '',
+    baseline_year:  currentYear.toString(),
+    baseline_value: '',
+    target_year:    (currentYear + template.years_to_target).toString(),
+    target_value:   template.suggested_target_value.toString(),
+    notes:          '',
+  };
+}
+
+// ─── Template card (browse step) ─────────────────────────────────────────────
+
+const SCOPE_COLORS_PILL: Record<string, string> = {
+  '1':    'bg-green-100 text-green-700',
+  '2':    'bg-blue-100 text-blue-700',
+  '3':    'bg-orange-100 text-orange-700',
+  'null': 'bg-purple-100 text-purple-700',
+};
+
+function TargetTemplateCard({
+  template,
+  selected,
+  onToggle,
+}: {
+  template: TargetTemplate;
+  selected: boolean;
+  onToggle: () => void;
+}) {
+  const scopeLabel = template.scope != null
+    ? `Обхват ${template.scope}`
+    : '1 + 2 + 3';
+  const scopeKey   = template.scope?.toString() ?? 'null';
+
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={`w-full text-left rounded-xl border-2 p-4 transition-all ${
+        selected
+          ? 'border-earth-400 bg-earth-50 shadow-md ring-2 ring-earth-200'
+          : 'border-gray-200 bg-white hover:border-earth-300 hover:shadow-sm'
+      }`}
+    >
+      {/* Top row */}
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <div className="flex-1">
+          <p className="text-sm font-semibold text-gray-900 leading-snug">{template.name}</p>
+          <p className="text-xs text-gray-500 mt-0.5">{template.framework}</p>
+        </div>
+        <div className={`h-6 w-6 rounded-full border-2 shrink-0 flex items-center justify-center transition-all ${
+          selected ? 'bg-earth-400 border-earth-400' : 'border-gray-300 bg-white'
+        }`}>
+          {selected && <Check className="h-3.5 w-3.5 text-white" />}
+        </div>
+      </div>
+
+      {/* Rationale */}
+      <p className="text-xs text-gray-600 line-clamp-2 mb-3">{template.rationale}</p>
+
+      {/* Chips */}
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        <span className="text-xs px-2 py-0.5 rounded-full bg-earth-50 text-earth-700 font-medium border border-earth-200">
+          {template.target_type === 'percentage' ? `-${template.suggested_target_value}%` :
+           template.target_type === 'intensity'  ? `-${template.suggested_target_value}% интензивност` :
+           `${template.suggested_target_value} tCO₂e`}
+          {' '}/{' '}{template.years_to_target} год.
+        </span>
+        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${SCOPE_COLORS_PILL[scopeKey]}`}>
+          {scopeLabel}
+        </span>
+        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${DIFFICULTY_COLORS[template.difficulty]}`}>
+          {DIFFICULTY_LABELS[template.difficulty]}
+        </span>
+        {template.sbti_aligned && (
+          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-100 text-emerald-700">
+            SBTi ✓
+          </span>
+        )}
+      </div>
+
+      {/* Tags */}
+      <div className="flex flex-wrap gap-1">
+        {template.tags.slice(0, 3).map(tag => (
+          <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">{tag}</span>
+        ))}
+      </div>
+    </button>
+  );
+}
+
+// ─── Two-step Target Template Picker ─────────────────────────────────────────
+
+function TargetTemplatePicker({
+  open,
+  onClose,
+  onApply,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onApply: (items: TargetReviewItem[]) => void;
+}) {
+  const currentYear = new Date().getFullYear();
+
+  const [step, setStep]             = useState<'browse' | 'review'>('browse');
+  const [selected, setSelected]     = useState<Set<string>>(new Set());
+  const [scopeFilter, setScopeFilter] = useState<string>('all');
+  const [reviewItems, setReviewItems] = useState<TargetReviewItem[]>([]);
+  const [applying, setApplying]     = useState(false);
+  const [fetchingIdx, setFetchingIdx] = useState<number | null>(null);
+
+  const handleClose = () => {
+    setStep('browse');
+    setSelected(new Set());
+    setReviewItems([]);
+    onClose();
+  };
+
+  const filtered = TARGET_TEMPLATES.filter(t => {
+    if (scopeFilter === 'all')  return true;
+    if (scopeFilter === 'null') return t.scope == null;
+    return t.scope?.toString() === scopeFilter;
+  });
+
+  const toggle = (id: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const goToReview = () => {
+    if (selected.size === 0) { toast.warning('Изберете поне един шаблон'); return; }
+    const items = TARGET_TEMPLATES
+      .filter(t => selected.has(t.id))
+      .map(t => buildTargetReviewItem(t, currentYear));
+    setReviewItems(items);
+    setStep('review');
+  };
+
+  const updateReviewItem = (idx: number, field: keyof TargetReviewItem, value: string) => {
+    setReviewItems(prev => prev.map((item, i) => i === idx ? { ...item, [field]: value } : item));
+  };
+
+  const removeReviewItem = (idx: number) => {
+    const updated = reviewItems.filter((_, i) => i !== idx);
+    if (updated.length === 0) { setStep('browse'); return; }
+    setReviewItems(updated);
+    setSelected(new Set(updated.map(i => i.templateId)));
+  };
+
+  // Fetch baseline value from emissions data for a specific review item
+  const fetchBaseline = async (idx: number) => {
+    const item = reviewItems[idx];
+    if (!item.baseline_year || item.baseline_year.length !== 4) {
+      toast.warning('Въведете валидна базова година'); return;
+    }
+    setFetchingIdx(idx);
+    try {
+      let total = 0;
+      if (item.scope === '3') {
+        const res = await fetch('/api/scope3/dashboard');
+        if (res.ok) {
+          const result = await res.json();
+          total = result.data?.totalCo2eKg ? result.data.totalCo2eKg / 1000 : 0;
+        }
+      } else {
+        const start = `${item.baseline_year}-01-01`;
+        const end   = `${item.baseline_year}-12-31`;
+        const res   = await fetch(`/api/emissions?start=${start}&end=${end}`);
+        if (res.ok) {
+          const result = await res.json();
+          const emissions = result.data || [];
+          if (!item.scope) {
+            total = emissions.reduce((s: number, e: { calculated_co2e?: number }) => s + (e.calculated_co2e || 0), 0);
+          } else {
+            total = emissions
+              .filter((e: { scope?: number }) => e.scope === parseInt(item.scope))
+              .reduce((s: number, e: { calculated_co2e?: number }) => s + (e.calculated_co2e || 0), 0);
+          }
+        }
+      }
+      if (total > 0) {
+        updateReviewItem(idx, 'baseline_value', total.toFixed(2));
+        toast.success(`Базова стойност: ${total.toFixed(2)} tCO₂e`);
+      } else {
+        toast.info('Няма данни за избрания период — въведете ръчно');
+      }
+    } catch { toast.error('Грешка при зареждане'); }
+    finally   { setFetchingIdx(null); }
+  };
+
+  const handleCreate = async () => {
+    // Validate baseline values
+    const missing = reviewItems.findIndex(i => !i.baseline_value || isNaN(parseFloat(i.baseline_value)));
+    if (missing !== -1) {
+      toast.error(`Въведете базова стойност за "${reviewItems[missing].name}"`);
+      return;
+    }
+    setApplying(true);
+    await onApply(reviewItems);
+    setApplying(false);
+    setSelected(new Set());
+    setReviewItems([]);
+    setStep('browse');
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-white">
+
+      {/* Top bar */}
+      <div className="border-b bg-white px-6 py-4 flex items-center justify-between shadow-sm shrink-0">
+        <div className="flex items-center gap-3">
+          {step === 'review' && (
+            <button onClick={() => setStep('browse')} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors mr-1">
+              <ArrowLeft className="h-5 w-5 text-gray-500" />
+            </button>
+          )}
+          <div className="h-9 w-9 rounded-lg bg-earth-100 flex items-center justify-center">
+            {step === 'browse' ? <Sparkles className="h-5 w-5 text-earth-400" /> : <Pencil className="h-5 w-5 text-earth-400" />}
+          </div>
+          <div>
+            {step === 'browse' ? (
+              <>
+                <h2 className="text-lg font-bold text-gray-900">Шаблони за цели</h2>
+                <p className="text-xs text-gray-500">Изберете научнообосновани цели, след това редактирайте параметрите</p>
+              </>
+            ) : (
+              <>
+                <h2 className="text-lg font-bold text-gray-900">Преглед и редакция</h2>
+                <p className="text-xs text-gray-500">Въведете базовите стойности и коригирайте параметрите</p>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <div className="hidden md:flex items-center gap-2 text-xs text-gray-500">
+            <span className={`flex items-center gap-1 font-medium ${step === 'browse' ? 'text-earth-500' : 'text-gray-400'}`}>
+              <span className={`h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-bold ${step === 'browse' ? 'bg-earth-400 text-white' : 'bg-gray-200 text-gray-500'}`}>1</span>
+              Избор
+            </span>
+            <ArrowRight className="h-3 w-3 text-gray-300" />
+            <span className={`flex items-center gap-1 font-medium ${step === 'review' ? 'text-earth-500' : 'text-gray-400'}`}>
+              <span className={`h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-bold ${step === 'review' ? 'bg-earth-400 text-white' : 'bg-gray-200 text-gray-500'}`}>2</span>
+              Редакция
+            </span>
+          </div>
+          <button onClick={handleClose} className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
+            <X className="h-5 w-5 text-gray-500" />
+          </button>
+        </div>
+      </div>
+
+      {/* ── BROWSE STEP ── */}
+      {step === 'browse' && (
+        <>
+          {/* Scope filter */}
+          <div className="border-b bg-gray-50 px-6 py-3 flex items-center gap-2 overflow-x-auto shrink-0">
+            {SCOPE_FILTER_OPTIONS.concat([{ value: 'sbti', label: 'SBTi ✓' }]).map(f => (
+              <button
+                key={f.value}
+                onClick={() => setScopeFilter(f.value)}
+                className={`shrink-0 text-xs px-3 py-1.5 rounded-full font-medium transition-colors ${
+                  scopeFilter === f.value
+                    ? 'bg-earth-400 text-white'
+                    : 'bg-white border border-gray-200 text-gray-600 hover:border-earth-300'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Template grid */}
+          <div className="flex-1 overflow-y-auto p-6">
+            <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {TARGET_TEMPLATES
+                .filter(t => {
+                  if (scopeFilter === 'all')  return true;
+                  if (scopeFilter === 'sbti') return t.sbti_aligned;
+                  if (scopeFilter === 'null') return t.scope == null;
+                  return t.scope?.toString() === scopeFilter;
+                })
+                .map(template => (
+                  <TargetTemplateCard
+                    key={template.id}
+                    template={template}
+                    selected={selected.has(template.id)}
+                    onToggle={() => toggle(template.id)}
+                  />
+                ))}
+            </div>
+          </div>
+
+          {/* Bottom bar */}
+          <div className="border-t bg-white px-6 py-4 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] shrink-0">
+            <div className="max-w-6xl mx-auto flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-6">
+                {selected.size > 0 ? (
+                  <>
+                    <div>
+                      <p className="text-xs text-gray-500">Избрани цели</p>
+                      <p className="text-xl font-bold text-gray-900">{selected.size}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Включва SBTi</p>
+                      <p className="text-sm font-bold text-emerald-600">
+                        {TARGET_TEMPLATES.filter(t => selected.has(t.id) && t.sbti_aligned).length > 0 ? '✓ Да' : '—'}
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm text-gray-500">Изберете шаблони от горе</p>
+                )}
+              </div>
+              <Button
+                onClick={goToReview}
+                disabled={selected.size === 0}
+                className="bg-earth-400 hover:bg-earth-500 gap-2 min-w-[200px]"
+              >
+                <Pencil className="h-4 w-4" />
+                Прегледай и редактирай
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── REVIEW STEP ── */}
+      {step === 'review' && (
+        <>
+          <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+            <div className="max-w-4xl mx-auto space-y-4">
+              <p className="text-sm text-gray-500">
+                Въведете базовата стойност на емисиите (tCO₂e) за базовата година — или заредете автоматично от данните.
+              </p>
+
+              {reviewItems.map((item, idx) => {
+                const template   = TARGET_TEMPLATES.find(t => t.id === item.templateId)!;
+                const scopeLabel = template.scope != null ? `Обхват ${template.scope}` : '1+2+3';
+                const scopeKey   = template.scope?.toString() ?? 'null';
+                const isFetching = fetchingIdx === idx;
+
+                const baselineYear = parseInt(item.baseline_year) || currentYear;
+                const targetYear   = parseInt(item.target_year)   || currentYear + template.years_to_target;
+                const years        = targetYear - baselineYear;
+                const baselineVal  = parseFloat(item.baseline_value);
+                const targetVal    = parseFloat(item.target_value);
+
+                // Live SBTi check (percentage type only)
+                let sbtiNote = '';
+                if (item.target_type === 'percentage' && years > 0 && targetVal > 0) {
+                  const annualRate = targetVal / years;
+                  const threshold  = template.scope === 3 ? 2.5 : 4.2;
+                  sbtiNote = annualRate >= threshold
+                    ? `✓ ${annualRate.toFixed(1)}% / год — SBTi съвместимо`
+                    : `⚠ ${annualRate.toFixed(1)}% / год — под SBTi прага (${threshold}%)`;
+                }
+
+                return (
+                  <div key={item.templateId} className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+                    {/* Header */}
+                    <div className="px-5 py-3 flex items-center justify-between bg-gray-50 border-b border-gray-200">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Target className="h-4 w-4 text-earth-400 shrink-0" />
+                        <span className="text-sm font-semibold text-gray-800">{template.framework}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${SCOPE_COLORS_PILL[scopeKey]}`}>
+                          {scopeLabel}
+                        </span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${DIFFICULTY_COLORS[template.difficulty]}`}>
+                          {DIFFICULTY_LABELS[template.difficulty]}
+                        </span>
+                        {template.sbti_aligned && (
+                          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-100 text-emerald-700">SBTi ✓</span>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => removeReviewItem(idx)}
+                        className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1 transition-colors"
+                      >
+                        <X className="h-3.5 w-3.5" /> Премахни
+                      </button>
+                    </div>
+
+                    <div className="p-5 space-y-4">
+                      {/* Name */}
+                      <div className="space-y-1">
+                        <Label className="text-xs text-gray-500">Наименование на целта</Label>
+                        <Input
+                          value={item.name}
+                          onChange={e => updateReviewItem(idx, 'name', e.target.value)}
+                          className="text-sm font-medium"
+                        />
+                      </div>
+
+                      {/* Row 1: baseline year | baseline value (with fetch) | target year | target value */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs text-gray-500">Базова година</Label>
+                          <Input
+                            type="number" min="2000" max="2100"
+                            value={item.baseline_year}
+                            onChange={e => updateReviewItem(idx, 'baseline_year', e.target.value)}
+                            className="text-sm"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs text-gray-500">
+                            Базова стойност (tCO₂e) <span className="text-red-500">*</span>
+                          </Label>
+                          <div className="flex gap-1.5">
+                            <Input
+                              type="number" step="0.01" min="0"
+                              value={item.baseline_value}
+                              onChange={e => updateReviewItem(idx, 'baseline_value', e.target.value)}
+                              placeholder="Зареди →"
+                              className={`text-sm flex-1 ${!item.baseline_value ? 'border-amber-300 focus:ring-amber-300' : ''}`}
+                            />
+                            <Button
+                              type="button" variant="outline" size="sm"
+                              onClick={() => fetchBaseline(idx)}
+                              disabled={isFetching}
+                              className="shrink-0 px-2"
+                              title="Зареди от данните"
+                            >
+                              {isFetching
+                                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                : <RefreshCw className="h-3.5 w-3.5" />}
+                            </Button>
+                          </div>
+                          {!item.baseline_value && (
+                            <p className="text-[10px] text-amber-600">Задължително — натиснете → за авто-зареждане</p>
+                          )}
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs text-gray-500">Целева година</Label>
+                          <Input
+                            type="number" min="2000" max="2100"
+                            value={item.target_year}
+                            onChange={e => updateReviewItem(idx, 'target_year', e.target.value)}
+                            className="text-sm"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs text-gray-500">
+                            {item.target_type === 'percentage' ? 'Намаление (%)' :
+                             item.target_type === 'intensity'  ? 'Намаление (%)' : 'Целева стойност (tCO₂e)'}
+                          </Label>
+                          <Input
+                            type="number" step="0.1" min="0"
+                            value={item.target_value}
+                            onChange={e => updateReviewItem(idx, 'target_value', e.target.value)}
+                            className="text-sm"
+                          />
+                          {sbtiNote && (
+                            <p className={`text-[10px] font-medium ${sbtiNote.startsWith('✓') ? 'text-green-600' : 'text-amber-600'}`}>
+                              {sbtiNote}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Row 2: type | scope */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs text-gray-500">Тип цел</Label>
+                          <Select
+                            value={item.target_type}
+                            onValueChange={v => updateReviewItem(idx, 'target_type', v)}
+                          >
+                            <SelectTrigger className="text-sm h-9"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="percentage">Процентно намаление</SelectItem>
+                              <SelectItem value="absolute">Абсолютна стойност</SelectItem>
+                              <SelectItem value="intensity">Интензивност</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs text-gray-500">Обхват</Label>
+                          <Select
+                            value={item.scope || 'all'}
+                            onValueChange={v => updateReviewItem(idx, 'scope', v === 'all' ? '' : v)}
+                          >
+                            <SelectTrigger className="text-sm h-9"><SelectValue placeholder="Всички" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">Всички обхвати</SelectItem>
+                              <SelectItem value="1">Обхват 1</SelectItem>
+                              <SelectItem value="2">Обхват 2</SelectItem>
+                              <SelectItem value="3">Обхват 3</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      {/* Calculated tCO2e target preview */}
+                      {item.target_type === 'percentage' && baselineVal > 0 && targetVal > 0 && (
+                        <div className="bg-earth-50 rounded-lg px-4 py-2.5 text-xs text-earth-800 flex items-center gap-2">
+                          <TrendingDown className="h-4 w-4 text-earth-500 shrink-0" />
+                          Целева абсолютна стойност:{' '}
+                          <strong>{(baselineVal * (1 - targetVal / 100)).toFixed(2)} tCO₂e</strong>
+                          {' '}(намаление от {((baselineVal * targetVal) / 100).toFixed(2)} tCO₂e)
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Confirm bar */}
+          <div className="border-t bg-white px-6 py-4 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] shrink-0">
+            <div className="max-w-4xl mx-auto flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-6">
+                <div>
+                  <p className="text-xs text-gray-500">Цели за създаване</p>
+                  <p className="text-xl font-bold text-gray-900">{reviewItems.length}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">SBTi съвместими</p>
+                  <p className="text-sm font-bold text-emerald-600">
+                    {TARGET_TEMPLATES.filter(t => reviewItems.some(i => i.templateId === t.id) && t.sbti_aligned).length}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Button variant="outline" onClick={() => setStep('browse')}>
+                  <ArrowLeft className="mr-2 h-4 w-4" /> Назад
+                </Button>
+                <Button
+                  onClick={handleCreate}
+                  disabled={applying || reviewItems.length === 0}
+                  className="bg-earth-400 hover:bg-earth-500 gap-2 min-w-[180px]"
+                >
+                  {applying
+                    ? <><Loader2 className="h-4 w-4 animate-spin" /> Създаване...</>
+                    : <><CheckCircle className="h-4 w-4" /> Създай {reviewItems.length} цели</>}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── Main page ─────────────────────────────────────────────────────────────
 
 export default function TargetsPage() {
   const [targets, setTargets]     = useState<EmissionTarget[]>([]);
   const [loading, setLoading]     = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [saving, setSaving]       = useState(false);
   const [syncing, setSyncing]     = useState(false);
   const [fetchingBaseline, setFetchingBaseline] = useState(false);
@@ -292,6 +879,37 @@ export default function TargetsPage() {
       fetchTargets();
     } catch { toast.error('Грешка при синхронизиране'); }
     finally   { setSyncing(false); }
+  };
+
+  const handleApplyTemplates = async (items: TargetReviewItem[]) => {
+    try {
+      const payload = {
+        targets: items.map(item => ({
+          templateId:     item.templateId,
+          name:           item.name,
+          description:    item.description || null,
+          target_type:    item.target_type,
+          scope:          item.scope ? parseInt(item.scope) : null,
+          baseline_year:  parseInt(item.baseline_year),
+          baseline_value: parseFloat(item.baseline_value),
+          target_year:    parseInt(item.target_year),
+          target_value:   parseFloat(item.target_value),
+        })),
+      };
+      const res = await fetch('/api/targets/from-templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.error); }
+      const result = await res.json();
+      toast.success(`Създадени ${result.data.created} цели успешно!`);
+      setTemplatePickerOpen(false);
+      setForecasts({});
+      fetchTargets();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Грешка при създаване');
+    }
   };
 
   const resetForm = () => {
@@ -429,11 +1047,18 @@ export default function TargetsPage() {
   }
 
   return (
+    <>
+      <TargetTemplatePicker
+        open={templatePickerOpen}
+        onClose={() => setTemplatePickerOpen(false)}
+        onApply={handleApplyTemplates}
+      />
+
     <div className="p-8">
       <div className="max-w-6xl mx-auto space-y-6">
 
         {/* ── Header ── */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-3">
             <div className="h-12 w-12 rounded-lg bg-earth-100 flex items-center justify-center">
               <Target className="h-6 w-6 text-earth-400" />
@@ -446,17 +1071,23 @@ export default function TargetsPage() {
             </div>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             {targets.length > 0 && (
               <Button variant="outline" onClick={syncTargets} disabled={syncing}>
                 <RefreshCw className={`mr-2 h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
                 Синхронизирай
               </Button>
             )}
+            <Button
+              className="bg-earth-400 hover:bg-earth-500 gap-2"
+              onClick={() => setTemplatePickerOpen(true)}
+            >
+              <Sparkles className="h-4 w-4" /> Избери от шаблони
+            </Button>
             <Dialog open={dialogOpen} onOpenChange={open => { setDialogOpen(open); if (!open) resetForm(); }}>
               <DialogTrigger asChild>
-                <Button className="bg-earth-300 hover:bg-earth-400">
-                  <Plus className="mr-2 h-4 w-4" /> Нова цел
+                <Button variant="outline">
+                  <Plus className="mr-2 h-4 w-4" /> Ръчно
                 </Button>
               </DialogTrigger>
 
@@ -909,5 +1540,6 @@ export default function TargetsPage() {
 
       </div>
     </div>
+    </>
   );
 }

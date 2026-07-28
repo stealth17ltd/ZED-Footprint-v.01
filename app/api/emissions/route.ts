@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createServiceClient } from '@/lib/supabase/service';
 import { z } from 'zod';
+import { lookupEmissionFactor } from '@/lib/emission-factors-lookup';
 
 const createEmissionSchema = z.object({
   scope: z.number().int().min(1).max(2),
@@ -12,6 +13,7 @@ const createEmissionSchema = z.object({
   notes: z.string().optional(),
   // Enhanced fields
   location: z.string().optional(),
+  location_id: z.string().uuid().optional().nullable(),
   equipment_id: z.string().optional(),
   supplier: z.string().optional(),
   invoice_number: z.string().optional(),
@@ -22,28 +24,9 @@ const createEmissionSchema = z.object({
   responsible_person: z.string().optional(),
 });
 
-// Emission factors for Bulgaria/EU (kgCO2e per unit)
-// Source: DEFRA 2023, Bulgarian Energy Agency
-const EMISSION_FACTORS: Record<string, { factor: number; gwp?: number }> = {
-  // Scope 1 - Vehicles
-  'vehicles_diesel': { factor: 2.68 },      // kg CO2e per liter
-  'vehicles_petrol': { factor: 2.31 },      // kg CO2e per liter
-  'vehicles_lpg': { factor: 1.67 },         // kg CO2e per liter
-  
-  // Scope 1 - Fuels
-  'natural_gas': { factor: 2.02 },          // kg CO2e per m³
-  'heating_oil': { factor: 3.18 },          // kg CO2e per liter
-  'coal': { factor: 2.42 },                 // kg CO2e per kg
-  
-  // Scope 1 - Refrigerants (GWP factors)
-  'refrigerant_r134a': { factor: 1, gwp: 1430 },    // GWP100
-  'refrigerant_r404a': { factor: 1, gwp: 3922 },    // GWP100
-  
-  // Scope 2 - Energy
-  'electricity': { factor: 0.505 },         // kg CO2e per kWh (Bulgaria grid 2023)
-  'district_heating': { factor: 0.220 },    // kg CO2e per kWh
-  'district_cooling': { factor: 0.185 },    // kg CO2e per kWh
-};
+// Emission factors are now resolved from the database via lookupEmissionFactor().
+// Static fallbacks remain inside that module and are used automatically
+// when no active DB row exists for a given category key.
 
 export async function POST(request: Request) {
   try {
@@ -73,8 +56,8 @@ export async function POST(request: Request) {
     const body = await request.json();
     const validatedData = createEmissionSchema.parse(body);
 
-    // Get emission factor
-    const emissionFactorData = EMISSION_FACTORS[validatedData.category];
+    // Resolve emission factor — DB-first, falls back to static constants
+    const emissionFactorData = await lookupEmissionFactor(validatedData.category);
     if (!emissionFactorData) {
       return NextResponse.json(
         { error: 'Невалидна категория емисия' },
@@ -83,10 +66,14 @@ export async function POST(request: Request) {
     }
 
     // Calculate CO2e
-    // Formula: CO2e (kg) = Activity Value × Emission Factor × GWP (if applicable)
-    const gwp = emissionFactorData.gwp || 1;
-    const calculatedCO2e_kg = validatedData.activity_value * emissionFactorData.factor * gwp;
-    const calculatedCO2e_tons = calculatedCO2e_kg / 1000; // Convert to metric tons
+    // Formula: CO2e (kg) = Activity Value × factor × GWP
+    const { factor, gwp, effectiveFactor, source: factorSource } = emissionFactorData;
+    const calculatedCO2e_kg   = validatedData.activity_value * effectiveFactor;
+    const calculatedCO2e_tons = calculatedCO2e_kg / 1000;
+
+    if (factorSource === 'fallback') {
+      console.warn(`[emissions POST] Using fallback factor for category: ${validatedData.category}`);
+    }
 
     // Convert reporting period to date (first day of month)
     const reportingDate = new Date(`${validatedData.reporting_period}-01`);
@@ -104,8 +91,8 @@ export async function POST(request: Request) {
         category: validatedData.category,
         activity_value: validatedData.activity_value,
         unit: validatedData.unit,
-        emission_factor: emissionFactorData.factor,
-        emission_factor_value: emissionFactorData.factor,
+        emission_factor: factor,
+        emission_factor_value: effectiveFactor,
         gwp_factor: gwp,
         calculated_co2e: calculatedCO2e_tons,
         data_source: 'manual',
@@ -114,6 +101,7 @@ export async function POST(request: Request) {
         uploaded_by: user.id,
         // Enhanced fields
         location: validatedData.location || null,
+        location_id: validatedData.location_id || null,
         equipment_id: validatedData.equipment_id || null,
         supplier: validatedData.supplier || null,
         invoice_number: validatedData.invoice_number || null,
@@ -121,7 +109,11 @@ export async function POST(request: Request) {
         data_quality: validatedData.data_quality || 'high',
         cost: validatedData.cost ? parseFloat(validatedData.cost) : null,
         currency: validatedData.currency || 'BGN',
-        responsible_person: validatedData.responsible_person || null,
+        responsible_person:  validatedData.responsible_person || null,
+        // Factor audit trail
+        factor_source_name: emissionFactorData.sourceName  || null,
+        factor_source_year: emissionFactorData.sourceYear  || null,
+        factor_db_id:       emissionFactorData.factorId    || null,
       })
       .select()
       .single();
@@ -134,13 +126,18 @@ export async function POST(request: Request) {
     return NextResponse.json({
       data: emissionData,
       calculation: {
-        activity_value: validatedData.activity_value,
-        unit: validatedData.unit,
-        emission_factor: emissionFactorData.factor,
-        gwp: gwp,
-        calculated_co2e_kg: calculatedCO2e_kg,
-        calculated_co2e_tons: calculatedCO2e_tons,
-      }
+        activity_value:     validatedData.activity_value,
+        unit:               validatedData.unit,
+        emission_factor:    factor,
+        gwp,
+        effective_factor:   effectiveFactor,
+        calculated_co2e_kg,
+        calculated_co2e_tons,
+        factor_source:      factorSource,
+        factor_id:          emissionFactorData.factorId,
+        factor_source_name: emissionFactorData.sourceName,
+        factor_source_year: emissionFactorData.sourceYear,
+      },
     }, { status: 201 });
   } catch (error) {
     console.error('Error creating emission data:', error);

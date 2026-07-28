@@ -5,7 +5,8 @@ import Link from 'next/link';
 import {
   Building2, LayoutDashboard, LogOut, FileText, HelpCircle,
   PlusCircle, Shield, Target, Database, ChevronDown, ListChecks,
-  Receipt, Tag, Upload, Zap, Leaf, Users, GitCompareArrows,
+  Receipt, Tag, Upload, Zap, Leaf, Users, GitCompareArrows, ShieldCheck,
+  BookOpen, Trophy, TrendingUp, Lightbulb, Lock, FlaskConical, MapPin,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -61,7 +62,8 @@ function menuItemCls(active: boolean) {
 
 export function AppNavLinks({ isAdmin }: { isAdmin: boolean }) {
   const { pathname, isActive, linkCls, triggerCls } = useNavHelpers();
-  const isDataActive = isActive('/data-entry') || isActive('/scope3');
+  const isDataActive     = isActive('/data-entry') || isActive('/scope3');
+  const isAnalysisActive = isActive('/comparison') || isActive('/benchmark');
 
   return (
     <nav className="hidden md:flex items-center space-x-0.5">
@@ -128,8 +130,14 @@ export function AppNavLinks({ isAdmin }: { isAdmin: boolean }) {
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
+                <Link href="/invoice-import" className={menuItemCls(pathname === '/invoice-import')}>
+                  <FileText className="h-4 w-4 text-blue-600" /> Импорт от фактури
+                  <span className="ml-auto text-xs bg-blue-100 text-blue-600 px-1.5 rounded font-medium">НОВО</span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
                 <Link href="/scope3/import" className={menuItemCls(pathname.startsWith('/scope3/import'))}>
-                  <Upload className="h-4 w-4 text-blue-500" /> Импорт транзакции
+                  <Upload className="h-4 w-4 text-blue-500" /> Импорт от CSV
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
@@ -147,6 +155,20 @@ export function AppNavLinks({ isAdmin }: { isAdmin: boolean }) {
                   <Zap className="h-4 w-4 text-purple-500" /> Правила
                 </Link>
               </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+
+              <SectionHeader label="КАЧЕСТВО & ОДИТ" color="bg-gray-50 text-gray-600" />
+              <DropdownMenuItem asChild>
+                <Link href="/data-quality" className={menuItemCls(pathname === '/data-quality')}>
+                  <ShieldCheck className="h-4 w-4 text-earth-400" /> Качество на данните
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/emission-factors" className={menuItemCls(pathname === '/emission-factors')}>
+                  <FlaskConical className="h-4 w-4 text-violet-500" /> Емисионни фактори
+                </Link>
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -159,9 +181,31 @@ export function AppNavLinks({ isAdmin }: { isAdmin: boolean }) {
             <Target className="h-4 w-4" /> Цели
           </Link>
 
-          <Link href="/comparison" className={linkCls('/comparison')}>
-            <GitCompareArrows className="h-4 w-4" /> Сравнение
+          <Link href="/strategies" className={linkCls('/strategies')}>
+            <Lightbulb className="h-4 w-4" /> Стратегии
           </Link>
+
+          {/* Анализ dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger className={triggerCls(isAnalysisActive)}>
+              <TrendingUp className="h-4 w-4" /> Анализ <ChevronDown className="h-3 w-3" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-60">
+              <SectionHeader label="ПЕРИОДИЧЕН АНАЛИЗ" color="bg-blue-50 text-blue-700" />
+              <DropdownMenuItem asChild>
+                <Link href="/comparison" className={menuItemCls(pathname === '/comparison')}>
+                  <GitCompareArrows className="h-4 w-4 text-blue-500" /> Сравнение по периоди
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <SectionHeader label="ИНДУСТРИЯ" color="bg-purple-50 text-purple-700" />
+              <DropdownMenuItem asChild>
+                <Link href="/benchmark" className={menuItemCls(pathname === '/benchmark')}>
+                  <Trophy className="h-4 w-4 text-purple-500" /> Сравнение по индустрия
+                </Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <Link href="/help" className={linkCls('/help')}>
             <HelpCircle className="h-4 w-4" /> Помощ
@@ -199,11 +243,29 @@ export function AppNavUser({ isAdmin, firstName, role }: NavProps) {
           <p className="text-xs text-gray-400">{roleLabel}</p>
         </div>
         {!isAdmin && (
-          <DropdownMenuItem asChild>
-            <Link href="/settings/company" className="cursor-pointer flex items-center gap-2 mt-1">
-              <Building2 className="h-4 w-4" /> Настройки компания
-            </Link>
-          </DropdownMenuItem>
+          <>
+            <DropdownMenuItem asChild>
+              <Link href="/settings/company" className="cursor-pointer flex items-center gap-2 mt-1">
+                <Building2 className="h-4 w-4" /> Настройки компания
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/settings/locations" className="cursor-pointer flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-blue-500" /> Локации
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/onboarding?guide=true" className="cursor-pointer flex items-center gap-2">
+                <BookOpen className="h-4 w-4 text-earth-500" />
+                <span className="text-earth-700 font-medium">Наръчник за настройка</span>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/settings/privacy" className="cursor-pointer flex items-center gap-2">
+                <Lock className="h-4 w-4 text-blue-500" /> Поверителност & GDPR
+              </Link>
+            </DropdownMenuItem>
+          </>
         )}
         <DropdownMenuSeparator />
         <form action="/api/auth/signout" method="post">

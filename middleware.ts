@@ -3,8 +3,8 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export async function middleware(req: NextRequest) {
-  const res = NextResponse.next();
-  
+  let supabaseResponse = NextResponse.next({ request: req });
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -15,42 +15,42 @@ export async function middleware(req: NextRequest) {
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => req.cookies.set(name, value));
-          cookiesToSet.forEach(({ name, value, options }) => 
-            res.cookies.set(name, value, options)
+          supabaseResponse = NextResponse.next({ request: req });
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options),
           );
         },
       },
-    }
+    },
   );
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  // Wrap in try/catch so a Supabase network failure (token refresh) never
+  // crashes the middleware or spams the console. Fall back to unauthenticated.
+  let session = null;
+  try {
+    const { data } = await supabase.auth.getSession();
+    session = data?.session ?? null;
+  } catch {
+    // Supabase unreachable or token refresh failed — treat as unauthenticated
+  }
 
-  // Redirect to login if not authenticated and trying to access protected routes
-  if (!session && !req.nextUrl.pathname.startsWith('/login')) {
+  const isLoginPath = req.nextUrl.pathname.startsWith('/login');
+
+  if (!session && !isLoginPath) {
     const loginUrl = new URL('/login', req.url);
     return NextResponse.redirect(loginUrl);
   }
 
-  // Redirect to dashboard if authenticated and trying to access login
-  if (session && req.nextUrl.pathname.startsWith('/login')) {
+  if (session && isLoginPath) {
     const dashboardUrl = new URL('/dashboard', req.url);
     return NextResponse.redirect(dashboardUrl);
   }
 
-  return res;
+  return supabaseResponse;
 }
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     */
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };

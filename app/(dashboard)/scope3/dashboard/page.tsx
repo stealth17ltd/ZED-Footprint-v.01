@@ -12,7 +12,7 @@ import {
 import {
   Leaf, TrendingUp, Receipt, Tag, Calculator, AlertTriangle,
   CheckCircle, BarChart3, PieChart as PieChartIcon, Building2,
-  ArrowRight, RefreshCw, Loader2, Star
+  ArrowRight, RefreshCw, Loader2, Star, FileText, Upload
 } from 'lucide-react';
 
 // Category colors
@@ -289,9 +289,16 @@ export default function Scope3DashboardPage() {
               <p className="text-sm text-gray-500 mb-6">
                 Импортирайте финансови транзакции, за да видите вашите Обхват 3 емисии
               </p>
-              <div className="flex justify-center gap-3">
+              <div className="flex flex-wrap justify-center gap-3">
+                <Link href="/invoice-import">
+                  <Button className="bg-blue-600 hover:bg-blue-700 text-white gap-2">
+                    <FileText className="h-4 w-4" />
+                    Импорт от фактури
+                  </Button>
+                </Link>
                 <Link href="/scope3/import">
-                  <Button className="bg-green-600 hover:bg-green-700 text-white">
+                  <Button className="bg-green-600 hover:bg-green-700 text-white gap-2">
+                    <Upload className="h-4 w-4" />
                     Импортирай CSV
                   </Button>
                 </Link>

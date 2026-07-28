@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -15,12 +15,19 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Save, Loader2, Calculator, ListChecks, Upload, PlusCircle } from 'lucide-react';
+import { Save, Loader2, Calculator, ListChecks, Upload, PlusCircle, MapPin, Plus } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { InfoTooltip } from '@/components/ui/info-tooltip';
-import { ZedLogo } from '@/components/ui/zed-logo';
 import { MonthPicker } from '@/components/ui/month-picker';
 import Link from 'next/link';
+
+interface CompanyLocation {
+  id: string;
+  location_name: string;
+  city: string | null;
+  location_type: string | null;
+  is_primary: boolean | null;
+}
 
 // Emission categories based on PRD
 const SCOPE_1_CATEGORIES = [
@@ -44,7 +51,24 @@ export default function DataEntryPage() {
   const router = useRouter();
   const [activeScope, setActiveScope] = useState<'1' | '2'>('1');
   const [saving, setSaving] = useState(false);
-  
+  const [locations, setLocations] = useState<CompanyLocation[]>([]);
+
+  // Load company locations on mount
+  useEffect(() => {
+    fetch('/api/locations')
+      .then(r => r.ok ? r.json() : { data: [] })
+      .then(json => {
+        const active = (json.data ?? []).filter((l: CompanyLocation & { is_active: boolean | null }) => l.is_active !== false);
+        setLocations(active);
+        // Pre-select primary location
+        const primary = active.find((l: CompanyLocation & { is_primary: boolean | null }) => l.is_primary);
+        if (primary) {
+          setFormData(prev => ({ ...prev, location_id: primary.id, location: primary.location_name }));
+        }
+      })
+      .catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const [formData, setFormData] = useState({
     scope: 1,
     category: '',
@@ -52,8 +76,10 @@ export default function DataEntryPage() {
     unit: '',
     reporting_period: new Date().toISOString().slice(0, 7), // YYYY-MM format
     notes: '',
-    // Enhanced fields
+    // Location fields
+    location_id: '',
     location: '',
+    // Enhanced fields
     equipment_id: '',
     supplier: '',
     invoice_number: '',
@@ -118,7 +144,8 @@ export default function DataEntryPage() {
       const result = await response.json();
       toast.success(`Данните са запазени успешно! CO2e: ${result.data.calculated_co2e.toFixed(2)} тона`);
       
-      // Reset form
+      // Reset form (keep location selection)
+      const primary = locations.find(l => l.is_primary);
       setFormData({
         scope: parseInt(activeScope),
         category: '',
@@ -126,8 +153,8 @@ export default function DataEntryPage() {
         unit: '',
         reporting_period: new Date().toISOString().slice(0, 7),
         notes: '',
-        // Reset enhanced fields
-        location: '',
+        location_id: primary?.id ?? '',
+        location: primary?.location_name ?? '',
         equipment_id: '',
         supplier: '',
         invoice_number: '',
@@ -311,16 +338,69 @@ export default function DataEntryPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Location */}
                   <div className="space-y-2">
-                    <Label htmlFor="location">
+                    <Label htmlFor="location" className="flex items-center gap-1">
+                      <MapPin className="h-3.5 w-3.5 text-blue-500" />
                       Локация/Обект
-                      <InfoTooltip content="Конкретна локация или обект, където е извършена дейността" />
+                      <InfoTooltip content="Изберете обект от вашите регистрирани локации или въведете ръчно" />
                     </Label>
-                    <Input
-                      id="location"
-                      value={formData.location}
-                      onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                      placeholder="напр. Склад София, Офис Варна..."
-                    />
+                    {locations.length > 0 ? (
+                      <div className="space-y-2">
+                        <Select
+                          value={formData.location_id || '__manual__'}
+                          onValueChange={v => {
+                            if (v === '__manual__') {
+                              setFormData({ ...formData, location_id: '', location: '' });
+                            } else {
+                              const loc = locations.find(l => l.id === v);
+                              setFormData({ ...formData, location_id: v, location: loc?.location_name ?? '' });
+                            }
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Изберете локация..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {locations.map(loc => (
+                              <SelectItem key={loc.id} value={loc.id}>
+                                <span className="flex items-center gap-2">
+                                  <MapPin className="h-3.5 w-3.5 text-gray-400" />
+                                  {loc.location_name}
+                                  {loc.city && <span className="text-gray-400">— {loc.city}</span>}
+                                  {loc.is_primary && <span className="text-xs text-earth-500">★</span>}
+                                </span>
+                              </SelectItem>
+                            ))}
+                            <SelectItem value="__manual__">
+                              <span className="flex items-center gap-2 text-gray-500">
+                                <Plus className="h-3.5 w-3.5" /> Въведи ръчно
+                              </span>
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {!formData.location_id && (
+                          <Input
+                            value={formData.location}
+                            onChange={e => setFormData({ ...formData, location: e.target.value })}
+                            placeholder="напр. Склад София, Офис Варна..."
+                          />
+                        )}
+                        <Link href="/settings/locations" className="inline-flex items-center gap-1 text-xs text-earth-400 hover:text-earth-500">
+                          <Plus className="h-3 w-3" /> Управлявай локациите
+                        </Link>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <Input
+                          id="location"
+                          value={formData.location}
+                          onChange={e => setFormData({ ...formData, location: e.target.value })}
+                          placeholder="напр. Склад София, Офис Варна..."
+                        />
+                        <Link href="/settings/locations" className="inline-flex items-center gap-1 text-xs text-blue-500 hover:text-blue-600">
+                          <Plus className="h-3 w-3" /> Добави регистрирани локации
+                        </Link>
+                      </div>
+                    )}
                   </div>
 
                   {/* Equipment ID */}

@@ -20,11 +20,16 @@ export default async function DashboardLayout({
 
   const { data: userData } = await supabase
     .from('users')
-    .select('role, first_name')
+    .select('role, first_name, onboarding_completed')
     .eq('id', session.user.id)
     .single();
 
   const isAdmin = userData?.role === 'admin';
+
+  // Redirect new (non-admin) users to the onboarding wizard
+  if (!isAdmin && userData?.onboarding_completed === false) {
+    redirect('/onboarding');
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">

@@ -5,7 +5,8 @@ import {
   BookOpen, HelpCircle, PlusCircle, FileText, Upload, BarChart,
   ExternalLink, Target, GitCompareArrows, Leaf, Tag, Zap,
   Receipt, Shield, Award, FileCheck, TrendingDown, Database,
-  ChevronRight,
+  ChevronRight, Globe, Flame, Package, Lightbulb, Lock, Sparkles,
+  ListChecks, Trophy,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -18,8 +19,8 @@ function QuickLink({
   return (
     <Link href={href}>
       <Card className={`hover:shadow-md transition-all cursor-pointer border-2 hover:border-opacity-80 ${color} h-full`}>
-        <CardContent className="pt-5 pb-4 text-center">
-          <Icon className="h-8 w-8 mx-auto mb-2 opacity-80" />
+        <CardContent className="pt-5 pb-4 flex flex-col items-center text-center">
+          <Icon className="h-8 w-8 mb-2 opacity-80" />
           <p className="font-semibold text-sm">{label}</p>
           {sub && <p className="text-xs mt-1 opacity-70">{sub}</p>}
         </CardContent>
@@ -57,15 +58,18 @@ export default function HelpPage() {
         {/* ── Quick links ── */}
         <div>
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Бърз достъп</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
-            <QuickLink href="/dashboard"         icon={BarChart}         label="Табло"         color="border-earth-200 text-earth-600"  />
-            <QuickLink href="/data-entry"        icon={PlusCircle}       label="Данни 1&2"     color="border-green-200 text-green-700"  />
-            <QuickLink href="/scope3/import"     icon={Upload}           label="Импорт S3"     color="border-blue-200 text-blue-700"    />
-            <QuickLink href="/scope3/classify"   icon={Tag}              label="Класиф."       color="border-blue-200 text-blue-700"    />
-            <QuickLink href="/reports"           icon={FileText}         label="Отчети"        color="border-purple-200 text-purple-700" />
-            <QuickLink href="/targets"           icon={Target}           label="Цели"          color="border-amber-200 text-amber-700"  />
-            <QuickLink href="/comparison"        icon={GitCompareArrows} label="Сравнение"     color="border-pink-200 text-pink-700"    />
-            <QuickLink href="/scope3/dashboard"  icon={Leaf}             label="Табло S3"      color="border-teal-200 text-teal-700"    />
+          <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-11 gap-3">
+            <QuickLink href="/dashboard"         icon={BarChart}         label="Табло"          color="border-earth-200 text-earth-600"  />
+            <QuickLink href="/data-entry"        icon={PlusCircle}       label="Данни 1&2"      color="border-green-200 text-green-700"  />
+            <QuickLink href="/scope3/import"     icon={Upload}           label="Импорт S3"      color="border-blue-200 text-blue-700"    />
+            <QuickLink href="/invoice-import"    icon={Receipt}          label="Фактури"        sub="НОВО" color="border-blue-200 text-blue-700" />
+            <QuickLink href="/scope3/classify"   icon={Tag}              label="Класиф."        color="border-blue-200 text-blue-700"    />
+            <QuickLink href="/reports"           icon={FileText}         label="Отчети"         color="border-purple-200 text-purple-700" />
+            <QuickLink href="/targets"           icon={Target}           label="Цели"           color="border-amber-200 text-amber-700"  />
+            <QuickLink href="/strategies"        icon={Lightbulb}        label="Стратегии"      sub="НОВО" color="border-amber-200 text-amber-600" />
+            <QuickLink href="/benchmark"         icon={Trophy}           label="Бенчмарк"       color="border-indigo-200 text-indigo-700" />
+            <QuickLink href="/data-quality"      icon={Shield}           label="Качество"       color="border-teal-200 text-teal-700"    />
+            <QuickLink href="/scope3/dashboard"  icon={Leaf}             label="Табло S3"       color="border-teal-200 text-teal-700"    />
           </div>
         </div>
 
@@ -84,6 +88,7 @@ export default function HelpPage() {
               <AccordionItem value="basics-1">
                 <AccordionTrigger className="text-left">
                   <div className="flex items-center gap-2">
+                    <Globe className="h-4 w-4 text-earth-400 shrink-0" />
                     <span className="font-semibold">Какво е въглероден отпечатък и tCO2e?</span>
                   </div>
                 </AccordionTrigger>
@@ -105,7 +110,10 @@ export default function HelpPage() {
 
               <AccordionItem value="basics-2">
                 <AccordionTrigger className="text-left">
-                  <span className="font-semibold">Обхват 1 — Директни емисии</span>
+                  <div className="flex items-center gap-2">
+                    <Flame className="h-4 w-4 text-orange-500 shrink-0" />
+                    <span className="font-semibold">Обхват 1 — Директни емисии</span>
+                  </div>
                 </AccordionTrigger>
                 <AccordionContent className="text-gray-700 space-y-2">
                   <p>Емисии от източници, <strong>притежавани или контролирани</strong> от вашата организация:</p>
@@ -122,7 +130,10 @@ export default function HelpPage() {
 
               <AccordionItem value="basics-3">
                 <AccordionTrigger className="text-left">
-                  <span className="font-semibold">Обхват 2 — Закупена енергия</span>
+                  <div className="flex items-center gap-2">
+                    <Zap className="h-4 w-4 text-yellow-500 shrink-0" />
+                    <span className="font-semibold">Обхват 2 — Закупена енергия</span>
+                  </div>
                 </AccordionTrigger>
                 <AccordionContent className="text-gray-700 space-y-2">
                   <p>Индиректни емисии от <strong>закупена електрическа или топлинна енергия</strong>:</p>
@@ -139,7 +150,10 @@ export default function HelpPage() {
 
               <AccordionItem value="basics-4">
                 <AccordionTrigger className="text-left">
-                  <span className="font-semibold">Обхват 3 — Верига на стойността (финансови транзакции)</span>
+                  <div className="flex items-center gap-2">
+                    <Package className="h-4 w-4 text-blue-500 shrink-0" />
+                    <span className="font-semibold">Обхват 3 — Верига на стойността (финансови транзакции)</span>
+                  </div>
                 </AccordionTrigger>
                 <AccordionContent className="text-gray-700 space-y-2">
                   <Badge className="mb-2 bg-blue-100 text-blue-700">Нова функция</Badge>
@@ -187,6 +201,38 @@ export default function HelpPage() {
                   </p>
                   <Link href="/scope3/import" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline mt-1">
                     Отиди на импорт <ChevronRight className="h-3 w-3" />
+                  </Link>
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="invoice-import">
+                <AccordionTrigger className="text-left">
+                  <div className="flex items-center gap-2">
+                    <Receipt className="h-4 w-4 text-blue-500 shrink-0" />
+                    <span className="font-semibold">Импорт от PDF фактури — как работи?</span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="text-gray-700 space-y-2">
+                  <Badge className="mb-2 bg-blue-100 text-blue-700">Нова функция</Badge>
+                  <p>
+                    Вместо CSV можете да качите директно <strong>PDF фактури</strong> — системата автоматично
+                    извлича ключовите данни и ги добавя като Обхват 3 транзакции.
+                  </p>
+                  <p><strong>Автоматично се разпознава:</strong></p>
+                  <ul className="list-disc list-inside space-y-1 ml-4 text-sm">
+                    <li><strong>Доставчик</strong> — фирмата-издател на фактурата</li>
+                    <li><strong>Дата</strong> — дата на издаване</li>
+                    <li><strong>Сума</strong> — крайна сума с ДДС</li>
+                    <li><strong>Валута</strong> — BGN, EUR, USD и др.</li>
+                    <li><strong>Описание</strong> — наименование на услугата/стоката</li>
+                    <li><strong>Номер на фактура</strong> — за референция</li>
+                  </ul>
+                  <p className="text-sm">
+                    Поддържа се формат на <strong>български фактури</strong> (с кирилица, ДДС разбивка,
+                    двуколонна структура). Качвате фактурата, преглеждате извлечените данни и потвърждавате.
+                  </p>
+                  <Link href="/invoice-import" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline mt-1">
+                    Отиди на Импорт от фактури <ChevronRight className="h-3 w-3" />
                   </Link>
                 </AccordionContent>
               </AccordionItem>
@@ -366,10 +412,237 @@ export default function HelpPage() {
                 </AccordionContent>
               </AccordionItem>
 
+              {/* ═══ BENCHMARK ═══ */}
+              <AccordionItem value="benchmark-1">
+                <AccordionTrigger className="text-left">
+                  <div className="flex items-center gap-2">
+                    <Zap className="h-4 w-4 text-amber-500 shrink-0" />
+                    <span className="font-semibold">Бенчмарк — как стоите спрямо индустрията?</span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="text-gray-700 space-y-2">
+                  <Badge className="mb-2 bg-amber-100 text-amber-700">Нова функция</Badge>
+                  <p>
+                    Страница <strong>Бенчмарк</strong> сравнява вашите емисии с анонимизирани данни от
+                    компании от същия сектор и размер.
+                  </p>
+                  <p><strong>Показва:</strong></p>
+                  <ul className="list-disc list-inside space-y-1 ml-4 text-sm">
+                    <li><strong>Оценка (A–D)</strong> — обща позиция спрямо индустрията</li>
+                    <li><strong>Сравнителен бар</strong> — вашите tCO2e/хил.EUR спрямо средното и лидерите</li>
+                    <li><strong>Радар диаграма</strong> — Обхват 1, 2, 3 спрямо пазарния медиан</li>
+                    <li><strong>Конкретни препоръки</strong> — какво да подобрите за по-добра оценка</li>
+                  </ul>
+                  <Link href="/benchmark" className="inline-flex items-center gap-1 text-sm text-amber-600 hover:underline mt-1">
+                    Отиди на Бенчмарк <ChevronRight className="h-3 w-3" />
+                  </Link>
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* ═══ DATA QUALITY ═══ */}
+              <AccordionItem value="data-quality-1">
+                <AccordionTrigger className="text-left">
+                  <div className="flex items-center gap-2">
+                    <Database className="h-4 w-4 text-teal-600 shrink-0" />
+                    <span className="font-semibold">Качество на данните — какво измерва?</span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="text-gray-700 space-y-2">
+                  <Badge className="mb-2 bg-teal-100 text-teal-700">Нова функция</Badge>
+                  <p>
+                    Страница <strong>Качество на данните</strong> дава цялостна оценка на пълнотата
+                    и точността на въведените данни.
+                  </p>
+                  <p><strong>Проверява:</strong></p>
+                  <ul className="list-disc list-inside space-y-1 ml-4 text-sm">
+                    <li>Покритие на месеците — кои периоди имат данни за Обхват 1, 2 и 3</li>
+                    <li>Процент класифицирани Обхват 3 транзакции</li>
+                    <li>Зададени цели и базова година</li>
+                    <li>Конкретни съвети за подобрение с приоритет</li>
+                  </ul>
+                  <p className="text-sm text-gray-500">
+                    По-високо качество означава по-надеждни изчисления и по-добро съответствие с GHG Protocol.
+                  </p>
+                  <Link href="/data-quality" className="inline-flex items-center gap-1 text-sm text-teal-600 hover:underline mt-1">
+                    Провери качеството на данните <ChevronRight className="h-3 w-3" />
+                  </Link>
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* ═══ STRATEGIES ═══ */}
+              <AccordionItem value="strategies-1">
+                <AccordionTrigger className="text-left">
+                  <div className="flex items-center gap-2">
+                    <Lightbulb className="h-4 w-4 text-amber-500 shrink-0" />
+                    <span className="font-semibold">Стратегии за намаляване — как работят?</span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="text-gray-700 space-y-3">
+                  <Badge className="mb-2 bg-amber-100 text-amber-700">Нова функция</Badge>
+                  <p>
+                    Раздел <strong>Стратегии</strong> превръща целите в конкретни действия. Всяка стратегия
+                    има категория, приоритет, очаквано намаление и списък от <em>инициативи</em> (задачи).
+                  </p>
+                  <div className="space-y-2">
+                    <p className="font-semibold text-sm">Двустъпков workflow:</p>
+                    <ol className="list-decimal list-inside space-y-1 ml-4 text-sm">
+                      <li>
+                        <strong>Разгледайте каталога</strong> — 12 шаблона в 8 категории
+                        (Ен. ефективност, ВЕИ, Автопарк, Верига на доставките, Отпадъци, Вода, Поведение, Друго).
+                        Можете да филтрирате по обхват и приоритет.
+                      </li>
+                      <li>
+                        <strong>Прегледайте преди активиране</strong> — редактирайте заглавие, очаквано
+                        CO2e намаление, бюджет, отговорник и начална дата директно в стъпка "Преглед",
+                        преди стратегията да бъде създадена.
+                      </li>
+                    </ol>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="font-semibold text-sm">Управление на инициативи:</p>
+                    <ul className="list-disc list-inside space-y-1 ml-4 text-sm">
+                      <li>Всяка стратегия идва с предварително дефинирани инициативи (типично 3–8)</li>
+                      <li>Маркирайте инициативите като завършени — прогрес-барът се обновява</li>
+                      <li>Добавяйте допълнителни инициативи за по-детайлно проследяване</li>
+                      <li>Свързвайте стратегия с конкретна <strong>Цел</strong> за пълна проследимост</li>
+                    </ul>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 pt-1">
+                    {[
+                      { value: '12', label: 'шаблона', color: 'text-amber-600' },
+                      { value: '60+', label: 'инициативи', color: 'text-emerald-600' },
+                      { value: '8', label: 'категории', color: 'text-blue-600' },
+                    ].map(s => (
+                      <div key={s.label} className="text-center bg-gray-50 rounded-lg p-2">
+                        <p className={`text-lg font-bold ${s.color}`}>{s.value}</p>
+                        <p className="text-xs text-gray-500">{s.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <Link href="/strategies" className="inline-flex items-center gap-1 text-sm text-amber-600 hover:underline mt-1">
+                    Управлявай стратегии <ChevronRight className="h-3 w-3" />
+                  </Link>
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="strategies-templates">
+                <AccordionTrigger className="text-left">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-amber-400 shrink-0" />
+                    <span className="font-semibold">Какви стратегии са налични в каталога?</span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="text-gray-700 space-y-2">
+                  <p>В каталога има <strong>12 готови шаблона</strong>, подбрани по типичните нужди на МСП:</p>
+                  <div className="grid sm:grid-cols-2 gap-2 text-sm">
+                    {[
+                      { emoji: '💡', cat: 'Ен. ефективност', items: ['LED осветление', 'Сграда: изолация', 'Оптимизация HVAC'] },
+                      { emoji: '☀️', cat: 'ВЕИ', items: ['Фотоволтаична инсталация', 'Зелена електроенергия'] },
+                      { emoji: '🚗', cat: 'Автопарк', items: ['Електрификация на автопарка'] },
+                      { emoji: '🔗', cat: 'Верига', items: ['Зелени критерии за доставчици', 'Транспортна оптимизация'] },
+                      { emoji: '♻️', cat: 'Отпадъци & вода', items: ['Zero-waste програма', 'Намаляване на водоемкостта'] },
+                      { emoji: '👥', cat: 'Поведенчески', items: ['Политика за командировки', 'Гъвкава работа от вкъщи'] },
+                    ].map(group => (
+                      <div key={group.cat} className="bg-gray-50 rounded-lg p-3">
+                        <p className="font-semibold text-xs text-gray-600 mb-1">{group.emoji} {group.cat}</p>
+                        <ul className="space-y-0.5">
+                          {group.items.map(i => (
+                            <li key={i} className="text-xs text-gray-500 flex items-center gap-1">
+                              <span className="h-1 w-1 rounded-full bg-gray-400 shrink-0" />
+                              {i}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Всички параметри (CO2e намаление, бюджет, срокове, отговорник) са изцяло редактируеми.
+                  </p>
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* ═══ GDPR ═══ */}
+              <AccordionItem value="gdpr-1">
+                <AccordionTrigger className="text-left">
+                  <div className="flex items-center gap-2">
+                    <Lock className="h-4 w-4 text-blue-600 shrink-0" />
+                    <span className="font-semibold">GDPR — как да управлявам и изтеглям данните си?</span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="text-gray-700 space-y-2">
+                  <Badge className="mb-2 bg-blue-100 text-blue-700">GDPR съвместимо</Badge>
+                  <p>
+                    ZED е изцяло съвместим с Регламент (ЕС) 2016/679 (GDPR).
+                    Центърът за поверителност е достъпен от <strong>Профил → Поверителност & GDPR</strong>.
+                  </p>
+                  <div className="space-y-1">
+                    <p className="font-semibold text-sm">Права, реализирани в платформата:</p>
+                    <ul className="list-disc list-inside space-y-1 ml-4 text-sm">
+                      <li>
+                        <strong>Право на достъп (Чл. 15)</strong> — изтеглете пълно JSON копие на всички
+                        данни: компания, потребители, емисии, транзакции, цели, стратегии и отчети.
+                      </li>
+                      <li>
+                        <strong>Право на преносимост (Чл. 20)</strong> — данните са в машинно-четим JSON
+                        формат, готов за прехвърляне към друга система.
+                      </li>
+                      <li>
+                        <strong>Право на изтриване (Чл. 17)</strong> — закриване на акаунт с изтриване на
+                        всички данни. Изисква изрично потвърждение (пишете "ИЗТРИЙ ДАННИТЕ МИ").
+                        Необратима операция.
+                      </li>
+                    </ul>
+                  </div>
+                  <div className="bg-amber-50 rounded-lg p-3 text-sm border border-amber-100">
+                    <p className="font-semibold text-amber-800 mb-1">⚠️ Важно за изтриването</p>
+                    <p className="text-amber-700 text-xs">
+                      Съхранението на данни за емисии за 10 г. е законово изискване по CSRD/данъчно право.
+                      Запазете CSV/JSON копие преди изтриване на акаунт.
+                    </p>
+                  </div>
+                  <Link href="/settings/privacy" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline mt-1">
+                    Отиди на Поверителност & GDPR <ChevronRight className="h-3 w-3" />
+                  </Link>
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="gdpr-2">
+                <AccordionTrigger className="text-left">
+                  <div className="flex items-center gap-2">
+                    <ListChecks className="h-4 w-4 text-teal-600 shrink-0" />
+                    <span className="font-semibold">Одитен CSV — как да генерирам и какво съдържа?</span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="text-gray-700 space-y-2">
+                  <p>
+                    От раздел <strong>Отчети</strong> можете да изтеглите пълен одитен CSV по GHG Protocol.
+                    Съдържа <em>пълна проследимост</em> за всяко изчисление — стойност, единица,
+                    приложен емисионен фактор, метод и референтен документ.
+                  </p>
+                  <p><strong>Структура на CSV-а:</strong></p>
+                  <ul className="list-disc list-inside space-y-0.5 ml-4 text-sm">
+                    <li>Тип запис (Обхват 1&2 / Обхват 3)</li>
+                    <li>Дата/период на отчитане</li>
+                    <li>Количество и единица</li>
+                    <li>Емисионен фактор — категория, стойност, единица, източник</li>
+                    <li>CO2e в кг и тонове</li>
+                    <li>Метод на изчисление и ниво (A/B/C по GHG Protocol)</li>
+                  </ul>
+                  <p className="text-sm text-gray-500">
+                    Файлът е готов за предоставяне на одитори и регулатори. Включва обобщение
+                    с общо CO2e по обхват в края на файла.
+                  </p>
+                </AccordionContent>
+              </AccordionItem>
+
               {/* ═══ STANDARDS ═══ */}
               <AccordionItem value="std-csrd">
                 <AccordionTrigger className="text-left">
-                  <span className="font-semibold">Какво е CSRD и ESRS E1?</span>
+                  <div className="flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-blue-600 shrink-0" />
+                    <span className="font-semibold">Какво е CSRD и ESRS E1?</span>
+                  </div>
                 </AccordionTrigger>
                 <AccordionContent className="text-gray-700 space-y-2">
                   <p>
@@ -389,7 +662,10 @@ export default function HelpPage() {
 
               <AccordionItem value="std-sbti">
                 <AccordionTrigger className="text-left">
-                  <span className="font-semibold">Какво е SBTi и как системата го поддържа?</span>
+                  <div className="flex items-center gap-2">
+                    <Award className="h-4 w-4 text-green-600 shrink-0" />
+                    <span className="font-semibold">Какво е SBTi и как системата го поддържа?</span>
+                  </div>
                 </AccordionTrigger>
                 <AccordionContent className="text-gray-700 space-y-2">
                   <p>
@@ -410,7 +686,10 @@ export default function HelpPage() {
 
               <AccordionItem value="std-ghg">
                 <AccordionTrigger className="text-left">
-                  <span className="font-semibold">Методология — GHG Protocol и емисионни фактори</span>
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="h-4 w-4 text-gray-500 shrink-0" />
+                    <span className="font-semibold">Методология — GHG Protocol и емисионни фактори</span>
+                  </div>
                 </AccordionTrigger>
                 <AccordionContent className="text-gray-700 space-y-2">
                   <p>ZED използва <strong>GHG Protocol Corporate Standard</strong> като базова методология.</p>
@@ -443,7 +722,7 @@ export default function HelpPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid md:grid-cols-3 gap-6 text-sm">
+            <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-6 text-sm">
               <div>
                 <p className="font-semibold text-earth-500 mb-2">Българско законодателство</p>
                 <ul className="space-y-2">
@@ -466,6 +745,14 @@ export default function HelpPage() {
                   <ExLink href="https://sciencebasedtargets.org/" label="Science Based Targets (SBTi)" />
                   <ExLink href="https://www.iso.org/standard/66453.html" label="ISO 14064" />
                   <ExLink href="https://www.cdp.net/" label="CDP — Carbon Disclosure Project" />
+                </ul>
+              </div>
+              <div className="sm:col-span-3 md:col-span-1">
+                <p className="font-semibold text-earth-500 mb-2">Поверителност & сигурност</p>
+                <ul className="space-y-2">
+                  <ExLink href="https://eur-lex.europa.eu/legal-content/BG/TXT/?uri=CELEX%3A32016R0679" label="GDPR — Регламент (ЕС) 2016/679" />
+                  <ExLink href="https://www.cpdp.bg/" label="КЗЛД — Комисия за защита на лични данни" />
+                  <ExLink href="/settings/privacy" label="Вашият GDPR панел" />
                 </ul>
               </div>
             </div>

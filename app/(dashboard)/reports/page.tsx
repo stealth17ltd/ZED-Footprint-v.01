@@ -101,6 +101,7 @@ function ReportsPageInner() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generatingStep, setGeneratingStep] = useState('');
   const [previewData, setPreviewData] = useState<EmissionData[] | null>(null);
   const [scope3Preview, setScope3Preview] = useState<any | null>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
@@ -166,49 +167,62 @@ function ReportsPageInner() {
     }
 
     setIsGenerating(true);
+    setGeneratingStep('Събиране на данни...');
 
     try {
       const endpoint = REPORT_ENDPOINTS[reportType] || '/api/reports/generate';
       const reportingYear = new Date(endDate).getFullYear();
 
-      // Internal generate endpoint needs reportType in payload; dedicated endpoints don't
       const needsReportType = endpoint === '/api/reports/generate';
       const payload = needsReportType
         ? { reportType, startDate, endDate, reportingYear }
         : { reportingYear, startDate, endDate };
-      
+
+      // Simulate progress steps for premium reports (font loading from CDN)
+      const stepTimer = setInterval(() => {
+        setGeneratingStep(prev => {
+          if (prev === 'Събиране на данни...') return 'Зареждане на шрифтове...';
+          if (prev === 'Зареждане на шрифтове...') return 'Изграждане на PDF страниците...';
+          if (prev === 'Изграждане на PDF страниците...') return 'Финализиране на документа...';
+          return prev;
+        });
+      }, 2500);
+
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
+      clearInterval(stepTimer);
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Грешка при генериране на отчета');
       }
 
-      // Get the PDF blob
+      // Extract filename from Content-Disposition header
+      const disposition = response.headers.get('Content-Disposition') ?? '';
+      const match = disposition.match(/filename="?([^";\n]+)"?/);
+      const filename = match?.[1] ?? `ZED-Report-${reportType}-${startDate}-${endDate}.pdf`;
+
       const blob = await response.blob();
-      
-      // Create download link
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Otchet-${reportType}-${startDate}-${endDate}.pdf`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
-      
-      // Cleanup
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
 
-      toast.success('Отчетът е генериран успешно!');
-    } catch (error: any) {
+      toast.success('Отчетът е генериран и изтеглен успешно!');
+    } catch (error: unknown) {
       console.error('Error generating report:', error);
-      toast.error(error.message || 'Възникна грешка при генериране на отчета');
+      toast.error(error instanceof Error ? error.message : 'Възникна грешка при генериране на отчета');
     } finally {
       setIsGenerating(false);
+      setGeneratingStep('');
     }
   };
 
@@ -496,10 +510,15 @@ function ReportsPageInner() {
                   size="lg"
                 >
                   {isGenerating ? (
-                    <>
-                      <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                      Генериране...
-                    </>
+                    <span className="flex flex-col items-center gap-0.5">
+                      <span className="flex items-center gap-2">
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                        Генериране на PDF...
+                      </span>
+                      {generatingStep && (
+                        <span className="text-xs opacity-75 font-normal">{generatingStep}</span>
+                      )}
+                    </span>
                   ) : (
                     <>
                       <Download className="mr-2 h-5 w-5" />
@@ -507,6 +526,7 @@ function ReportsPageInner() {
                     </>
                   )}
                 </Button>
+
               </CardContent>
             </Card>
 
