@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { generateComplianceReport } from '@/lib/reports/compliance-report';
+import { getCompanyFootprint } from '@/lib/carbon/footprint-service';
+import { getEvidenceCoverage } from '@/lib/evidence/coverage';
 
 export async function POST(request: Request) {
   try {
@@ -24,7 +26,7 @@ export async function POST(request: Request) {
 
     const { data: company } = await supabase
       .from('companies')
-      .select('company_name, registration_number, industry_sector, employee_count, billing_address')
+      .select('company_name, registration_number, industry_sector, employee_count, billing_address, annual_turnover_eur, ets_has_installation, ets_thermal_input_mw, ets_activity_annex_i')
       .eq('id', userData.company_id)
       .single();
 
@@ -32,18 +34,22 @@ export async function POST(request: Request) {
 
     const { data: emissions } = await supabase
       .from('emission_data')
-      .select('scope, category, calculated_co2e')
+      .select('category, calculated_co2e')
       .eq('company_id', userData.company_id)
       .gte('reporting_period', startDate)
       .lte('reporting_period', endDate);
 
+    const footprint = await getCompanyFootprint(supabase, userData.company_id, reportingYear);
+    const evidenceCoverage = await getEvidenceCoverage(supabase, userData.company_id, reportingYear);
+
     const { data: scope3Data } = await supabase
       .from('calculated_emissions')
-      .select('co2e_kg')
+      .select('id')
       .eq('company_id', userData.company_id)
       .eq('scope', 3)
       .gte('reporting_period', `${reportingYear}-01-01`)
-      .lte('reporting_period', `${reportingYear}-12-31`);
+      .lte('reporting_period', `${reportingYear}-12-31`)
+      .limit(1);
 
     const { data: targets } = await supabase
       .from('emission_targets')
@@ -51,9 +57,6 @@ export async function POST(request: Request) {
       .eq('company_id', userData.company_id)
       .eq('status', 'active');
 
-    const scope1 = (emissions || []).filter(e => e.scope === 1).reduce((s, e) => s + (e.calculated_co2e || 0), 0);
-    const scope2 = (emissions || []).filter(e => e.scope === 2).reduce((s, e) => s + (e.calculated_co2e || 0), 0);
-    const scope3Kg = (scope3Data || []).reduce((s, e) => s + (e.co2e_kg || 0), 0);
     const emissionsByCategory = (emissions || []).reduce((acc: Record<string, number>, e) => {
       acc[e.category] = (acc[e.category] || 0) + (e.calculated_co2e || 0);
       return acc;
@@ -68,19 +71,24 @@ export async function POST(request: Request) {
         industry_sector: company.industry_sector,
         employee_count: company.employee_count,
         address: company.billing_address,
+        annual_turnover_eur: company.annual_turnover_eur,
+        ets_has_installation: company.ets_has_installation,
+        ets_thermal_input_mw: company.ets_thermal_input_mw,
+        ets_activity_annex_i: company.ets_activity_annex_i,
       },
       reportingYear,
-      scope1Total: scope1,
-      scope2Total: scope2,
-      scope3Total: scope3Kg / 1000,
+      scope1Total: footprint.scope1,
+      scope2Total: footprint.scope2,
+      scope3Total: footprint.scope3,
       scope3Available: (scope3Data?.length || 0) > 0,
       emissionsByCategory,
       targets: targets || [],
       generatedBy,
+      evidenceCoverage,
     });
 
     const safeName = company.company_name.replace(/[\u0400-\u04FF]/g, '').replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'Company';
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',

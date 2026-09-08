@@ -30,6 +30,7 @@ import DataQualityWidget from '@/components/dashboard/DataQualityWidget';
 import StrategiesProgressWidget from '@/components/dashboard/StrategiesProgressWidget';
 import YearSelector from '@/components/dashboard/YearSelector';
 import { InfoTooltip } from '@/components/ui/info-tooltip';
+import { getCompanyFootprint, getFairYoYComparison } from '@/lib/carbon/footprint-service';
 
 const CATEGORY_LABELS: Record<string, string> = {
   vehicles_diesel: 'Превозни средства - Дизел',
@@ -90,44 +91,54 @@ export default async function DashboardPage({
   // Always include the current real year
   if (!dataYears.includes(nowYear)) dataYears.unshift(nowYear);
 
+  const parsedYearParam = params.year ? parseInt(params.year, 10) : NaN;
+  if (!Number.isNaN(parsedYearParam) && !dataYears.includes(parsedYearParam)) {
+    dataYears.push(parsedYearParam);
+    dataYears.sort((a, b) => b - a);
+  }
+
   // Resolve selected year from URL param, default to current real year
   const selectedYear =
-    params.year && dataYears.includes(parseInt(params.year))
-      ? parseInt(params.year)
+    !Number.isNaN(parsedYearParam) &&
+    parsedYearParam >= 2000 &&
+    parsedYearParam <= nowYear + 1
+      ? parsedYearParam
       : nowYear;
 
   const prevYear = selectedYear - 1;
 
-  // For the current year, compare only months elapsed so far (fair comparison).
-  // For past years, compare the full year against the full year before it.
-  const isCurrentYear = selectedYear === nowYear;
-  const currentMonthIndex = new Date().getMonth(); // 0-11
+  // ── Canonical footprint (single source of truth) ───────────────────────────
+  let yearFootprint = { scope1: 0, scope2: 0, scope3: 0, total: 0, year: selectedYear };
+  let fairYoY = {
+    current: yearFootprint,
+    previous: { scope1: 0, scope2: 0, scope3: 0, total: 0, year: prevYear },
+    totalChangePercent: null as number | null,
+    scope1ChangePercent: null as number | null,
+    scope2ChangePercent: null as number | null,
+    scope3ChangePercent: null as number | null,
+    selectedYear,
+    previousYear: prevYear,
+  };
 
-  // ── Year-over-year calculations ─────────────────────────────────────────────
+  if (userData?.company_id) {
+    [yearFootprint, fairYoY] = await Promise.all([
+      getCompanyFootprint(supabase, userData.company_id, selectedYear),
+      getFairYoYComparison(supabase, userData.company_id, selectedYear),
+    ]);
+  }
+
+  const ytdTotal = yearFootprint.total;
+  const ytdScope1 = yearFootprint.scope1;
+  const ytdScope2 = yearFootprint.scope2;
+  const yoyTotal = fairYoY.totalChangePercent;
+  const yoyScope1 = fairYoY.scope1ChangePercent;
+  const yoyScope2 = fairYoY.scope2ChangePercent;
+  const prevTotal = fairYoY.previous.total;
+
+  // Legacy filter for charts (Scope 1+2 monthly — unchanged)
   const ytdData = emissionsData.filter(
     (i) => new Date(i.reporting_period).getFullYear() === selectedYear,
   );
-  // Same months previous year for a fair comparison
-  const prevYearData = emissionsData.filter((i) => {
-    const d = new Date(i.reporting_period);
-    if (d.getFullYear() !== prevYear) return false;
-    return isCurrentYear ? d.getMonth() <= currentMonthIndex : true;
-  });
-
-  const sum = (arr: any[]) =>
-    arr.reduce((s, i) => s + (i.calculated_co2e || 0), 0);
-
-  const ytdTotal = sum(ytdData);
-  const ytdScope1 = sum(ytdData.filter((i) => i.scope === 1));
-  const ytdScope2 = sum(ytdData.filter((i) => i.scope === 2));
-
-  const prevTotal = sum(prevYearData);
-  const prevScope1 = sum(prevYearData.filter((i) => i.scope === 1));
-  const prevScope2 = sum(prevYearData.filter((i) => i.scope === 2));
-
-  const yoyTotal = prevTotal > 0 ? ((ytdTotal - prevTotal) / prevTotal) * 100 : null;
-  const yoyScope1 = prevScope1 > 0 ? ((ytdScope1 - prevScope1) / prevScope1) * 100 : null;
-  const yoyScope2 = prevScope2 > 0 ? ((ytdScope2 - prevScope2) / prevScope2) * 100 : null;
 
   // Intensity per employee
   const employeeCount: number | null = userData?.company?.employee_count || null;
@@ -157,7 +168,7 @@ export default async function DashboardPage({
   }, {});
   const chartData = (Object.values(monthlyMap) as any[]).reverse().slice(-12);
 
-  const hasData = emissionsData.length > 0;
+  const hasData = ytdTotal > 0 || emissionsData.length > 0;
 
   // Recent entries
   const recentEmissions = emissionsData.slice(0, 5);
@@ -167,8 +178,15 @@ export default async function DashboardPage({
     total_co2e_tons: number;
     calculations: number;
     top_category: number | null;
-    txn_count: number;
-  } = { total_co2e_tons: 0, calculations: 0, top_category: null, txn_count: 0 };
+    year_txn_count: number;
+    unclassified_count: number;
+  } = {
+    total_co2e_tons: 0,
+    calculations: 0,
+    top_category: null,
+    year_txn_count: 0,
+    unclassified_count: 0,
+  };
 
   if (userData?.company_id) {
     const { data: scope3Emissions } = await supabase
@@ -190,16 +208,29 @@ export default async function DashboardPage({
         byCategory[cat] = (byCategory[cat] || 0) + parseFloat(e.co2e_kg.toString());
       });
       const topEntry = Object.entries(byCategory).sort(([, a], [, b]) => b - a)[0];
-      scope3Summary.total_co2e_tons = Math.round((totalKg / 1000) * 1000) / 1000;
+      scope3Summary.total_co2e_tons = yearFootprint.scope3;
       scope3Summary.calculations = scope3Emissions.length;
       scope3Summary.top_category = topEntry ? parseInt(topEntry[0]) : null;
     }
 
-    const { count: txnCount } = await supabase
+    const { data: yearTransactions } = await supabase
       .from('transactions')
-      .select('id', { count: 'exact', head: true })
-      .eq('company_id', userData.company_id);
-    scope3Summary.txn_count = txnCount || 0;
+      .select('id')
+      .eq('company_id', userData.company_id)
+      .gte('txn_date', `${selectedYear}-01-01`)
+      .lte('txn_date', `${selectedYear}-12-31`);
+
+    scope3Summary.year_txn_count = yearTransactions?.length || 0;
+
+    if (yearTransactions && yearTransactions.length > 0) {
+      const txnIds = yearTransactions.map((t) => t.id);
+      const { data: classified } = await supabase
+        .from('transaction_classifications')
+        .select('transaction_id')
+        .in('transaction_id', txnIds);
+      const classifiedIds = new Set(classified?.map((c) => c.transaction_id) || []);
+      scope3Summary.unclassified_count = txnIds.length - classifiedIds.size;
+    }
   }
 
   // ── Insight sentence ─────────────────────────────────────────────────────────
@@ -249,13 +280,32 @@ export default async function DashboardPage({
 
   const deltaLabel = prevTotal > 0 ? `vs ${prevYear}` : undefined;
 
-  // Scope 3 card subtitle
-  const scope3Subtitle =
-    scope3Summary.total_co2e_tons > 0
-      ? `${scope3Summary.calculations} изчисления · виж детайли`
-      : scope3Summary.txn_count > 0
-        ? `${scope3Summary.txn_count} транзакции — изчисли`
-        : 'Импортирай транзакции →';
+  // Scope 3 card subtitle & link (year-aware)
+  const scope3Subtitle = (() => {
+    if (yearFootprint.scope3 > 0) {
+      return `${scope3Summary.calculations} изчисления · виж детайли`;
+    }
+    if (scope3Summary.unclassified_count > 0) {
+      return `${scope3Summary.unclassified_count} некласифицирани · класифицирай`;
+    }
+    if (scope3Summary.year_txn_count > 0) {
+      return `${scope3Summary.year_txn_count} транзакции · изчисли`;
+    }
+    return 'Импортирай транзакции →';
+  })();
+
+  const scope3Href = (() => {
+    if (yearFootprint.scope3 > 0) {
+      return `/scope3/dashboard?year=${selectedYear}`;
+    }
+    if (scope3Summary.unclassified_count > 0) {
+      return '/scope3/classify';
+    }
+    if (scope3Summary.year_txn_count > 0) {
+      return '/scope3/transactions';
+    }
+    return '/scope3/import';
+  })();
 
   return (
     <div className="p-6 lg:p-8">
@@ -265,7 +315,7 @@ export default async function DashboardPage({
         <div className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-3 mb-1.5">
-              <h1 className="text-2xl font-bold text-gray-900">Табло за управление</h1>
+              <h1 className="text-2xl font-bold text-gray-900">Табло за управление на устойчивостта</h1>
               <YearSelector years={dataYears} selectedYear={selectedYear} />
             </div>
             {insight ? (
@@ -296,7 +346,7 @@ export default async function DashboardPage({
             title={`Общо ${selectedYear}`}
             value={ytdTotal}
             icon={<Leaf className="h-5 w-5" />}
-            tooltip="Общият въглероден отпечатък за текущата година (Обхват 1 + 2). Измерен в тонове CO₂ еквивалент (tCO₂e)."
+            tooltip="Общият въглероден отпечатък за избраната година (Обхват 1 + 2 + 3). Измерен в tCO₂e."
             iconBgClass="bg-[#C5E1A5]/30"
             colorClass="text-earth-400"
             delta={yoyTotal}
@@ -316,7 +366,7 @@ export default async function DashboardPage({
             delta={yoyScope1}
             deltaLabel={deltaLabel}
             showProgress
-            totalForPercentage={ytdTotal}
+            totalForPercentage={ytdTotal > 0 ? ytdTotal : undefined}
           />
 
           {/* Scope 2 */}
@@ -330,26 +380,20 @@ export default async function DashboardPage({
             delta={yoyScope2}
             deltaLabel={deltaLabel}
             showProgress
-            totalForPercentage={ytdTotal}
+            totalForPercentage={ytdTotal > 0 ? ytdTotal : undefined}
           />
 
           {/* Scope 3 */}
           <EmissionsSummaryCard
             title="Обхват 3 — Верига"
-            value={scope3Summary.total_co2e_tons}
+            value={yearFootprint.scope3}
             icon={<Globe2 className="h-5 w-5" />}
             tooltip="Индиректни емисии по веригата на стойността: закупени стоки, транспорт, бизнес пътувания и др."
             iconBgClass="bg-emerald-50"
             colorClass="text-emerald-600"
             subtitle={scope3Subtitle}
-            href={
-              scope3Summary.total_co2e_tons > 0
-                ? '/scope3/dashboard'
-                : scope3Summary.txn_count > 0
-                  ? '/scope3/classify'
-                  : '/scope3/import'
-            }
-            emptyLabel={scope3Summary.total_co2e_tons === 0 ? scope3Subtitle : undefined}
+            href={scope3Href}
+            emptyLabel={yearFootprint.scope3 === 0 ? scope3Subtitle : undefined}
           />
 
           {/* Intensity per employee */}
@@ -358,7 +402,7 @@ export default async function DashboardPage({
             value={intensityPerEmployee ?? 0}
             unit="tCO₂e / служ."
             icon={<Users className="h-5 w-5" />}
-            tooltip="Въглероден интензитет на служител за текущата година. Изчислява се от общите Обхват 1+2 емисии спрямо броя на служителите."
+            tooltip="Въглероден интензитет на служител (Обхват 1+2+3) за избраната година."
             iconBgClass="bg-purple-50"
             colorClass="text-purple-600"
             emptyLabel={
@@ -407,10 +451,14 @@ export default async function DashboardPage({
                     <PieChart className="h-4 w-4 text-earth-400" />
                     По обхват
                   </CardTitle>
-                  <CardDescription>Обхват 1 vs Обхват 2</CardDescription>
+                  <CardDescription>Обхват 1, 2 и 3</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ScopeBreakdownChart scope1={ytdScope1} scope2={ytdScope2} />
+                  <ScopeBreakdownChart
+                    scope1={ytdScope1}
+                    scope2={ytdScope2}
+                    scope3={yearFootprint.scope3}
+                  />
                 </CardContent>
               </Card>
 

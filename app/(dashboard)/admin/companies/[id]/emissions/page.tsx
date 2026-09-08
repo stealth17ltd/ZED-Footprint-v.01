@@ -1,5 +1,8 @@
 'use client';
 
+'use client';
+
+import { DEFAULT_CURRENCY } from '@/lib/constants/currency';
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -526,11 +529,11 @@ export default function CompanyEmissionsPage() {
                       Финансова информация
                     </h3>
                     <div className="grid grid-cols-2 gap-4 p-4 bg-amber-50 rounded-lg">
-                      {selectedEmission.cost !== null && (
+                      {selectedEmission.cost != null && (
                         <div>
                           <p className="text-xs text-gray-500 mb-1">Разходи</p>
                           <p className="font-medium">
-                            {selectedEmission.cost.toFixed(2)} {selectedEmission.currency || 'BGN'}
+                            {selectedEmission.cost.toFixed(2)} {selectedEmission.currency || DEFAULT_CURRENCY}
                           </p>
                         </div>
                       )}

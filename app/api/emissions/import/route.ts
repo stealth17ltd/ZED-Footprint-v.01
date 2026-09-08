@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server';
+import { DEFAULT_CURRENCY, IMPORT_CURRENCIES, normalizeCostForStorage } from '@/lib/constants/currency';
 import { createClient } from '@/lib/supabase/server';
 import { createServiceClient } from '@/lib/supabase/service';
 import * as XLSX from 'xlsx';
+import {
+  factorFromEmissionRow,
+  writeCalculationSnapshot,
+} from '@/lib/carbon/calculation-snapshot';
 
 // Emission factors (same as in manual entry)
 const EMISSION_FACTORS: Record<string, { factor: number; gwp?: number }> = {
@@ -217,7 +222,7 @@ export async function POST(request: Request) {
       // Validate optional fields
       const validMeasurementMethods = ['measured', 'calculated', 'estimated'];
       const validDataQualities = ['high', 'medium', 'low'];
-      const validCurrencies = ['BGN', 'EUR', 'USD'];
+      const validCurrencies: string[] = [...IMPORT_CURRENCIES];
 
       if (measurement_method && !validMeasurementMethods.includes(String(measurement_method).trim())) {
         errors.push({
@@ -306,6 +311,8 @@ export async function POST(request: Request) {
       const calculatedCO2e_tons = calculatedCO2e_kg / 1000;
       const reportingDate = new Date(`${row.month}-01`);
 
+      const { cost, currency } = normalizeCostForStorage(row.cost ?? null, row.currency);
+
       return {
         company_id: userData.company_id,
         reporting_period: reportingDate.toISOString().split('T')[0],
@@ -328,8 +335,8 @@ export async function POST(request: Request) {
         invoice_number: row.invoice_number || null,
         measurement_method: row.measurement_method || 'measured',
         data_quality: row.data_quality || 'high',
-        cost: row.cost || null,
-        currency: row.currency || 'BGN',
+        cost,
+        currency,
         responsible_person: row.responsible_person || null,
       };
     });
@@ -343,6 +350,24 @@ export async function POST(request: Request) {
     if (insertError) {
       console.error('Insert error:', insertError);
       throw insertError;
+    }
+
+    for (const row of insertedData ?? []) {
+      await writeCalculationSnapshot(serviceSupabase, {
+        companyId: userData.company_id,
+        emissionId: row.id,
+        scope: row.scope,
+        category: row.category,
+        locationId: row.location_id,
+        activityValue: row.activity_value,
+        activityUnit: row.unit,
+        factor: factorFromEmissionRow(row),
+        co2eTons: row.calculated_co2e,
+        dataQuality: row.data_quality,
+        measurementMethod: row.measurement_method,
+        dataSource: 'import',
+        calculatedBy: user.id,
+      });
     }
 
     return NextResponse.json({

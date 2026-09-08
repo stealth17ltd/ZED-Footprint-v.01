@@ -46,13 +46,26 @@ export default function DataQualityWidget({ year }: { year?: number }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
     setData(null);
-    const url = year ? `/api/data-quality?year=${year}` : '/api/data-quality';
-    fetch(url)
-      .then(r => r.ok ? r.json() : null)
-      .then(r => r && setData(r.data))
-      .finally(() => setLoading(false));
+
+    async function load() {
+      try {
+        const url = year ? `/api/data-quality?year=${year}` : '/api/data-quality';
+        const response = await fetch(url);
+        if (!response.ok || cancelled) return;
+        const result = await response.json();
+        if (!cancelled && result?.data) setData(result.data);
+      } catch {
+        // Dev server restarts / network blips should not crash the dashboard
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    load();
+    return () => { cancelled = true; };
   }, [year]);
 
   if (loading) {
@@ -135,6 +148,16 @@ export default function DataQualityWidget({ year }: { year?: number }) {
               </div>
               <Bar value={data.scope3ClassificationRate}
                 color={data.scope3ClassificationRate >= 70 ? 'bg-blue-400' : 'bg-amber-400'} />
+            </div>
+          )}
+          {data.evidenceCoverage.scope12Entries > 0 && (
+            <div>
+              <div className="flex justify-between text-gray-600">
+                <span>Доказателства</span>
+                <span className="font-medium">{data.evidenceCoverage.coveragePercent}%</span>
+              </div>
+              <Bar value={data.evidenceCoverage.coveragePercent}
+                color={data.evidenceCoverage.coveragePercent >= 50 ? 'bg-purple-400' : 'bg-amber-400'} />
             </div>
           )}
         </div>

@@ -10,7 +10,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { Company } from '@/types';
 import { bg } from '@/lib/i18n/bg';
-import { Building2, Save, Loader2 } from 'lucide-react';
+import { Building2, Save, Loader2, Factory, ChevronRight } from 'lucide-react';
+import Link from 'next/link';
+import { EuEtsGuidancePanel } from '@/components/guidance/EuEtsGuidancePanel';
+import { GuidanceHint, LabelWithGuidance } from '@/components/guidance/GuidanceHint';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 
 export default function CompanyProfilePage() {
   const [company, setCompany] = useState<Company | null>(null);
@@ -70,12 +76,17 @@ export default function CompanyProfilePage() {
           sustainability_goals: company.sustainability_goals,
           eu_green_deal_commitment: company.eu_green_deal_commitment,
           baseline_year: company.baseline_year,
+          annual_turnover_eur: company.annual_turnover_eur ?? null,
+          ets_has_installation: company.ets_has_installation ?? null,
+          ets_thermal_input_mw: company.ets_thermal_input_mw ?? null,
+          ets_activity_annex_i: company.ets_activity_annex_i ?? null,
         }),
       });
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || 'Грешка при запазване');
+        const detail = error.details?.[0]?.message;
+        throw new Error(detail || error.error || 'Грешка при запазване');
       }
 
       toast.success('Данните са запазени успешно');
@@ -220,6 +231,27 @@ export default function CompanyProfilePage() {
                   placeholder="Незадължително"
                 />
               </div>
+              <div className="space-y-2">
+                <LabelWithGuidance
+                  htmlFor="annual_turnover_eur"
+                  label="Годишен оборот (EUR)"
+                  guidanceKey="csrdTurnover"
+                />
+                <Input
+                  id="annual_turnover_eur"
+                  type="number"
+                  min="0"
+                  step="1000"
+                  value={company.annual_turnover_eur ?? ''}
+                  onChange={(e) => setCompany({
+                    ...company,
+                    annual_turnover_eur: e.target.value ? parseFloat(e.target.value) : null,
+                  })}
+                  disabled={!isEditing}
+                  placeholder="За CSRD скрининг (опционално)"
+                />
+                <p className="text-xs text-gray-500">Използва се за определяне на задължителен CSRD обхват</p>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -308,6 +340,104 @@ export default function CompanyProfilePage() {
                   <label htmlFor="eu_green_deal" className="ml-2 text-sm text-gray-700">
                     Ангажимент към ЕС Зелена сделка
                   </label>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* EU ETS screening questionnaire */}
+        <Card id="eu-ets" className="border-blue-200 scroll-mt-24">
+          <CardHeader>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Factory className="h-5 w-5 text-blue-600" />
+                  EU ETS скрининг
+                  <GuidanceHint guidanceKey="euEtsScreening" />
+                </CardTitle>
+                <CardDescription>
+                  Въпросник за инсталации по Directive 2003/87/EC — не се използва общ корпоративен tCO₂e
+                </CardDescription>
+              </div>
+              <Link
+                href="/settings/compliance"
+                className="text-xs text-emerald-700 hover:underline flex items-center gap-1 shrink-0"
+              >
+                Виж скрининг <ChevronRight className="h-3 w-3" />
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <EuEtsGuidancePanel />
+
+            <div className="space-y-2">
+              <LabelWithGuidance
+                label="Оперира ли компанията инсталация по смисъла на EU ETS?"
+                guidanceKey="installation"
+              />
+              <Select
+                value={
+                  company.ets_has_installation === true ? 'yes'
+                    : company.ets_has_installation === false ? 'no'
+                      : 'unknown'
+                }
+                onValueChange={(v) => setCompany({
+                  ...company,
+                  ets_has_installation: v === 'yes' ? true : v === 'no' ? false : null,
+                })}
+                disabled={!isEditing}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Изберете..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unknown">Не е попълнено</SelectItem>
+                  <SelectItem value="yes">Да — има инсталация</SelectItem>
+                  <SelectItem value="no">Не — няма инсталация</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <LabelWithGuidance
+                  htmlFor="ets_thermal_input_mw"
+                  label="Топлинен вход на горене (MW)"
+                  guidanceKey="thermalInputMw"
+                />
+                <Input
+                  id="ets_thermal_input_mw"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={company.ets_thermal_input_mw ?? ''}
+                  onChange={(e) => setCompany({
+                    ...company,
+                    ets_thermal_input_mw: e.target.value ? parseFloat(e.target.value) : null,
+                  })}
+                  disabled={!isEditing}
+                  placeholder="напр. 15.5"
+                />
+                <p className="text-xs text-gray-500">Праг ≥20 MW изисква експертен преглед</p>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center h-10 pt-1 gap-1">
+                  <input
+                    id="ets_activity_annex_i"
+                    type="checkbox"
+                    checked={company.ets_activity_annex_i === true}
+                    onChange={(e) => setCompany({
+                      ...company,
+                      ets_activity_annex_i: e.target.checked ? true : false,
+                    })}
+                    disabled={!isEditing}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="ets_activity_annex_i" className="ml-2 text-sm text-gray-700">
+                    Инсталацията извършва дейност по Annex I на EU ETS
+                  </label>
+                  <GuidanceHint guidanceKey="annexI" />
                 </div>
               </div>
             </div>

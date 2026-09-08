@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createServiceClient } from '@/lib/supabase/service';
 import { z } from 'zod';
 
 const updateCompanySchema = z.object({
@@ -12,13 +13,18 @@ const updateCompanySchema = z.object({
   sustainability_goals: z.string().nullable().optional(),
   eu_green_deal_commitment: z.boolean().optional(),
   baseline_year: z.number().min(2000).max(2030).nullable().optional(),
+  annual_turnover_eur: z.number().nonnegative().nullable().optional(),
+  ets_has_installation: z.boolean().nullable().optional(),
+  ets_thermal_input_mw: z.number().nonnegative().nullable().optional(),
+  ets_activity_annex_i: z.boolean().nullable().optional(),
 });
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
     
     const { data: { user } } = await supabase.auth.getUser();
@@ -29,7 +35,7 @@ export async function GET(
     const { data, error } = await supabase
       .from('companies')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (error) {
@@ -51,9 +57,10 @@ export async function GET(
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
     
     const { data: { user } } = await supabase.auth.getUser();
@@ -73,21 +80,26 @@ export async function PATCH(
     }
 
     // Admin can edit any company, client can only edit their own
-    if (userData.role !== 'admin' && userData.company_id !== params.id) {
+    if (userData.role !== 'admin' && userData.company_id !== id) {
       return NextResponse.json({ error: 'Нямате права за тази операция' }, { status: 403 });
     }
 
     const body = await request.json();
     const validatedData = updateCompanySchema.parse(body);
 
-    const { data, error } = await supabase
+    // Service role bypasses RLS — clients may update own company via API after auth check above
+    const serviceSupabase = createServiceClient();
+    const { data, error } = await serviceSupabase
       .from('companies')
-      .update(validatedData)
-      .eq('id', params.id)
+      .update({ ...validatedData, updated_at: new Date().toISOString() })
+      .eq('id', id)
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase company update error:', error);
+      throw error;
+    }
 
     return NextResponse.json({ data });
   } catch (error) {
@@ -95,7 +107,7 @@ export async function PATCH(
     
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: 'Грешка при валидация', details: error.errors },
+        { error: 'Грешка при валидация', details: error.issues },
         { status: 400 }
       );
     }
@@ -109,9 +121,10 @@ export async function PATCH(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
     
     const { data: { user } } = await supabase.auth.getUser();
@@ -134,7 +147,7 @@ export async function DELETE(
     const { error } = await supabase
       .from('companies')
       .update({ is_active: false })
-      .eq('id', params.id);
+      .eq('id', id);
 
     if (error) throw error;
 

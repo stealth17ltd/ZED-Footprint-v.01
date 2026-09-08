@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { getCompanyFootprint, roundTco2e } from '@/lib/carbon/footprint-service';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Industry benchmark data (tCO2e per employee per year)
@@ -199,30 +200,12 @@ export async function GET(request: Request) {
     const employeeCount = company?.employee_count ?? 10;
     const benchmark    = INDUSTRY_BENCHMARKS[sector] ?? DEFAULT_BENCHMARK;
 
-    // Scope 1 & 2 actuals
-    const { data: ed } = await supabase
-      .from('emission_data')
-      .select('scope, calculated_co2e')
-      .eq('company_id', userData.company_id)
-      .gte('reporting_period', `${year}-01-01`)
-      .lte('reporting_period', `${year}-12-31`);
-
-    const actualScope1 = (ed ?? []).filter(r => r.scope === 1).reduce((s, r) => s + (r.calculated_co2e ?? 0), 0);
-    const actualScope2 = (ed ?? []).filter(r => r.scope === 2).reduce((s, r) => s + (r.calculated_co2e ?? 0), 0);
-
-    // Scope 3 actuals
-    const { data: s3 } = await supabase
-      .from('calculated_emissions')
-      .select('co2e_kg')
-      .eq('company_id', userData.company_id)
-      .eq('scope', 3)
-      .gte('reporting_period', `${year}-01-01`)
-      .lte('reporting_period', `${year}-12-31`);
-
-    const actualScope3 = (s3 ?? []).reduce((sum, r) => sum + (r.co2e_kg ?? 0), 0) / 1000; // kg → tCO2e
-
-    const actualTotal = actualScope1 + actualScope2 + actualScope3;
-    const hasData     = actualTotal > 0;
+    const footprint = await getCompanyFootprint(supabase, userData.company_id, year);
+    const actualScope1 = footprint.scope1;
+    const actualScope2 = footprint.scope2;
+    const actualScope3 = footprint.scope3;
+    const actualTotal  = footprint.total;
+    const hasData      = actualTotal > 0;
 
     // Per-employee intensity
     const actualPerEmployee   = employeeCount > 0 ? actualTotal / employeeCount : 0;
@@ -240,11 +223,11 @@ export async function GET(request: Request) {
       year,
       sector,
       employeeCount,
-      actualScope1:      Math.round(actualScope1 * 100) / 100,
-      actualScope2:      Math.round(actualScope2 * 100) / 100,
-      actualScope3:      Math.round(actualScope3 * 100) / 100,
-      actualTotal:       Math.round(actualTotal  * 100) / 100,
-      actualPerEmployee: Math.round(actualPerEmployee * 100) / 100,
+      actualScope1:      actualScope1,
+      actualScope2:      actualScope2,
+      actualScope3:      actualScope3,
+      actualTotal:       actualTotal,
+      actualPerEmployee: roundTco2e(actualPerEmployee),
       benchmark,
       benchmarkTotal:    Math.round(benchmarkTotal * 100) / 100,
       vsIndustryPct:     hasData ? vsIndustryPct : 0,

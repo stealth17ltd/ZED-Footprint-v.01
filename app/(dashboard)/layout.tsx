@@ -11,23 +11,23 @@ export default async function DashboardLayout({
   const supabase = await createClient();
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!session) {
+  if (!user) {
     redirect('/login');
   }
 
   const { data: userData } = await supabase
     .from('users')
     .select('role, first_name, onboarding_completed')
-    .eq('id', session.user.id)
+    .eq('id', user.id)
     .single();
 
   const isAdmin = userData?.role === 'admin';
 
   // Redirect new (non-admin) users to the onboarding wizard
-  if (!isAdmin && userData?.onboarding_completed === false) {
+  if (!isAdmin && userData?.onboarding_completed !== true) {
     redirect('/onboarding');
   }
 

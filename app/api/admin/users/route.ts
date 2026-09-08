@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 const createUserSchema = z.object({
   email: z.string().email('Невалиден имейл адрес'),
-  password: z.string().min(6, 'Паролата трябва да е поне 6 символа'),
+  password: z.string().min(8, 'Паролата трябва да е поне 8 символа'),
   first_name: z.string().min(1, 'Името е задължително'),
   last_name: z.string().min(1, 'Фамилията е задължителна'),
   role: z.enum(['admin', 'client']),
@@ -71,6 +71,7 @@ export async function POST(request: Request) {
         role: validatedData.role,
         company_id: validatedData.company_id || null,
         is_active: true,
+        onboarding_completed: false,
       })
       .select()
       .single();
@@ -87,7 +88,7 @@ export async function POST(request: Request) {
     
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: 'Грешка при валидация', details: error.errors },
+        { error: 'Грешка при валидация', details: error.issues },
         { status: 400 }
       );
     }

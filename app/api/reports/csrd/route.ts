@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { generatePremiumCSRDReport } from '@/lib/reports/premium-csrd-report';
+import { getYoYComparison } from '@/lib/carbon/footprint-service';
+import { enrichScope3CalculationsForReport } from '@/lib/carbon/scope3-report-data';
+import { getEvidenceCoverage } from '@/lib/evidence/coverage';
 
 export async function POST(request: Request) {
   try {
@@ -41,14 +44,15 @@ export async function POST(request: Request) {
     // ── Parallel data fetch ──────────────────────────────────────────────
     const [
       { data: emissionsData },
-      { data: scope3Data },
+      { data: scope3Raw },
       { data: targets },
       { data: strategies },
-      { data: prevYearData },
+      yoy,
+      evidenceCoverage,
     ] = await Promise.all([
       supabase
         .from('emission_data')
-        .select('reporting_period, scope, category, activity_value, unit, calculated_co2e, measurement_method, data_quality, location, factor_source_name, factor_source_year')
+        .select('reporting_period, scope, category, activity_value, unit, calculated_co2e, measurement_method, data_quality, location, factor_source_name, factor_source_year, emission_factor')
         .eq('company_id', userData.company_id)
         .gte('reporting_period', startDate)
         .lte('reporting_period', endDate)
@@ -56,7 +60,7 @@ export async function POST(request: Request) {
 
       supabase
         .from('calculated_emissions')
-        .select('scope_category, co2e_kg, method_tier, calculation_trace')
+        .select('scope_category, co2e_kg, method_tier, calculation_trace, source_type, source_id')
         .eq('company_id', userData.company_id)
         .eq('scope', 3)
         .gte('reporting_period', `${reportingYear}-01-01`)
@@ -75,35 +79,23 @@ export async function POST(request: Request) {
         .in('status', ['active', 'completed'])
         .order('status', { ascending: true }),
 
-      supabase
-        .from('emission_data')
-        .select('calculated_co2e')
-        .eq('company_id', userData.company_id)
-        .gte('reporting_period', `${reportingYear - 1}-01-01`)
-        .lte('reporting_period', `${reportingYear - 1}-12-31`),
+      getYoYComparison(supabase, userData.company_id, reportingYear),
+      getEvidenceCoverage(supabase, userData.company_id, reportingYear),
     ]);
 
-    // ── Year-over-year ────────────────────────────────────────────────────
-    const scope1Total = (emissionsData ?? []).filter(e => e.scope === 1)
-      .reduce((s: number, e: { calculated_co2e: number }) => s + (e.calculated_co2e ?? 0), 0);
-    const scope2Total = (emissionsData ?? []).filter(e => e.scope === 2)
-      .reduce((s: number, e: { calculated_co2e: number }) => s + (e.calculated_co2e ?? 0), 0);
-    const scope3TotalKg = (scope3Data ?? [])
-      .reduce((s: number, e: { co2e_kg: number }) => s + (e.co2e_kg ?? 0), 0);
-    const currentTotal = scope1Total + scope2Total + scope3TotalKg / 1000;
+    const scope3Data = await enrichScope3CalculationsForReport(
+      supabase,
+      scope3Raw ?? [],
+    );
 
-    let comparisonData;
-    if (prevYearData && prevYearData.length > 0) {
-      const prevTotal = prevYearData.reduce(
-        (s: number, e: { calculated_co2e: number }) => s + (e.calculated_co2e ?? 0), 0
-      );
-      const change = currentTotal - prevTotal;
-      comparisonData = {
-        previousYear: prevTotal,
-        change,
-        changePercent: prevTotal > 0 ? (change / prevTotal) * 100 : 0,
-      };
-    }
+    const comparisonData =
+      yoy.previousTotal > 0 || yoy.currentTotal > 0
+        ? {
+            previousYear: yoy.previousTotal,
+            change: yoy.change,
+            changePercent: yoy.changePercent,
+          }
+        : undefined;
 
     const generatedBy = `${userData.first_name ?? ''} ${userData.last_name ?? ''}`.trim()
       || user.email
@@ -120,10 +112,14 @@ export async function POST(request: Request) {
       },
       reportingYear,
       scope12Emissions: emissionsData ?? [],
-      scope3Calculations: scope3Data ?? [],
+      scope3Calculations: (scope3Data ?? []).map((row) => ({
+        ...row,
+        calculation_trace: row.calculation_trace ?? undefined,
+      })),
       targets:    targets ?? [],
       strategies: strategies ?? [],
       comparisonData,
+      evidenceCoverage,
       generatedBy,
     });
 

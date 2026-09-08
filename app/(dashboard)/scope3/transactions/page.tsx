@@ -25,6 +25,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
+import { PageSkeleton } from '@/components/ui/page-skeleton';
 import { 
   Receipt, 
   Plus, 
@@ -322,11 +323,7 @@ export default function TransactionsListPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="h-8 w-8 animate-spin text-earth-300" />
-      </div>
-    );
+    return <PageSkeleton statCards={4} />;
   }
 
   return (
@@ -512,16 +509,32 @@ export default function TransactionsListPage() {
                     <div>
                       <p className="text-sm text-green-700 mb-1">Изчисления</p>
                       <p className="text-3xl font-bold text-green-900">
-                        {calculationSummary.total_calculations}
+                        {calculationSummary.unique_calculated_transactions ?? calculationSummary.total_calculations}
                       </p>
-                      <p className="text-sm text-green-600">транзакции</p>
+                      <p className="text-sm text-green-600">
+                        транзакции
+                        {(calculationSummary.total_calculations ?? 0) >
+                          (calculationSummary.unique_calculated_transactions ?? 0) && (
+                          <span className="text-green-600/80">
+                            {' '}({calculationSummary.total_calculations} записа)
+                          </span>
+                        )}
+                      </p>
                     </div>
 
                     <div>
                       <p className="text-sm text-green-700 mb-1">Покритие</p>
                       <p className="text-3xl font-bold text-green-900">
-                        {classifiedCount > 0 
-                          ? Math.round((calculationSummary.total_calculations / classifiedCount) * 100)
+                        {classifiedCount > 0
+                          ? Math.min(
+                              100,
+                              Math.round(
+                                ((calculationSummary.unique_calculated_transactions ??
+                                  calculationSummary.total_calculations) /
+                                  classifiedCount) *
+                                  100,
+                              ),
+                            )
                           : 0}%
                       </p>
                       <p className="text-sm text-green-600">от класифицирани</p>
@@ -667,9 +680,9 @@ export default function TransactionsListPage() {
                           </span>
                           <span className="text-xs text-gray-500 ml-1">{txn.base_currency}</span>
                         </div>
-                        {txn.currency !== txn.base_currency && (
+                        {txn.currency_original !== txn.base_currency && (
                           <div className="text-xs text-gray-400">
-                            {formatAmount(txn.amount)} {txn.currency}
+                            {formatAmount(txn.amount_original)} {txn.currency_original}
                           </div>
                         )}
                       </TableCell>
@@ -853,8 +866,8 @@ export default function TransactionsListPage() {
                   <div>
                     <p className="text-sm text-gray-500">Сума</p>
                     <p className="font-medium">
-                      {formatAmount(selectedTransaction.amount)} {selectedTransaction.currency}
-                      {selectedTransaction.currency !== selectedTransaction.base_currency && (
+                      {formatAmount(selectedTransaction.amount_original)} {selectedTransaction.currency_original}
+                      {selectedTransaction.currency_original !== selectedTransaction.base_currency && (
                         <span className="text-sm text-gray-500 ml-2">
                           ({formatAmount(selectedTransaction.amount_base_currency)} {selectedTransaction.base_currency})
                         </span>

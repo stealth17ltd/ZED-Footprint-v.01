@@ -23,7 +23,9 @@ import React from 'react';
 import path from 'path';
 import {
   Document, Page, Text, View, Font, StyleSheet, renderToBuffer,
+  type DocumentProps,
 } from '@react-pdf/renderer';
+import { PDF_PLATFORM_NAME } from './pdf-text';
 
 // ── Local full-Unicode fonts (Cyrillic-capable) ────────────────────────────
 // Stored in /public/fonts/ — full Roboto TTF files with Latin + Cyrillic glyphs.
@@ -96,6 +98,9 @@ const SCOPE_COLOR = {
   3: { solid: ZED.orange, light: ZED.orangeLight, label: 'Обхват 3' },
 };
 
+/** Corner radii — match pdf-lib reports (subtle professional rounding) */
+const R = { sm: 3.5, md: 6, lg: 8 } as const;
+
 // ── Labels ─────────────────────────────────────────────────────────────────
 const CAT_LABELS: Record<string, string> = {
   vehicles_diesel:    'Превозни средства — Дизел',
@@ -119,6 +124,30 @@ const S3_LABELS: Record<number, string> = {
   7: 'Кат. 7 — Пътуване на служители',
 };
 
+const STRATEGY_CAT_LABELS: Record<string, string> = {
+  energy_efficiency: 'Енергийна ефективност',
+  renewable_energy: 'Възобновяема енергия',
+  fleet: 'Транспорт и автопарк',
+  supply_chain: 'Верига на доставки',
+  waste: 'Управление на отпадъци',
+  water: 'Водни ресурси',
+  behavioral: 'Поведенчески промени',
+  other: 'Друго',
+};
+
+function formatFactorCell(row: PremiumReportData['scope12Emissions'][0]): string {
+  if (row.emission_factor != null && !Number.isNaN(row.emission_factor)) {
+    const src = row.factor_source_name
+      ? ` (${row.factor_source_name}${row.factor_source_year ? ` ${row.factor_source_year}` : ''})`
+      : '';
+    return `${row.emission_factor} kg/${row.unit}${src}`;
+  }
+  if (row.factor_source_name) {
+    return `${row.factor_source_name}${row.factor_source_year ? ` (${row.factor_source_year})` : ''}`;
+  }
+  return '—';
+}
+
 const BG_MONTHS = ['Яну', 'Фев', 'Мар', 'Апр', 'Май', 'Юни',
                    'Юли', 'Авг', 'Сеп', 'Окт', 'Ное', 'Дек'];
 
@@ -136,7 +165,7 @@ const S = StyleSheet.create({
   pageInner: {
     marginHorizontal: 44,
     marginTop: 52,
-    marginBottom: 52,
+    marginBottom: 78,
     flex: 1,
   },
 
@@ -208,7 +237,7 @@ const S = StyleSheet.create({
   coverFooterLeft: { color: 'rgba(255,255,255,0.35)', fontSize: 7.5, lineHeight: 1.8 },
   coverFooterRight: {
     backgroundColor: 'rgba(16,185,129,0.10)',
-    borderRadius: 6, paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: R.md, paddingHorizontal: 12, paddingVertical: 8,
     alignItems: 'center',
     borderWidth: 1, borderColor: 'rgba(16,185,129,0.25)',
   },
@@ -224,17 +253,18 @@ const S = StyleSheet.create({
   pageHeaderLeft: { fontSize: 7.5, color: ZED.green, fontWeight: 'bold', letterSpacing: 0.8 },
   pageHeaderRight: { fontSize: 7.5, color: ZED.gray400 },
   pageFooter: {
-    position: 'absolute', bottom: 18, left: 44, right: 44,
-    flexDirection: 'row', justifyContent: 'space-between',
+    position: 'absolute', bottom: 22, left: 44, right: 44,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end',
     borderTopWidth: 0.5, borderTopColor: ZED.gray200, paddingTop: 6,
   },
-  pageFooterText: { fontSize: 7, color: ZED.gray400 },
+  pageFooterText: { fontSize: 6.5, color: ZED.gray400, maxWidth: '82%' },
+  pageFooterPage: { fontSize: 7, color: ZED.gray400, flexShrink: 0, marginLeft: 8 },
 
   // ── Section title band ──
   sectionBand: {
     backgroundColor: ZED.navy,      // deep charcoal
     paddingHorizontal: 12, paddingVertical: 9,
-    marginBottom: 14, borderRadius: 4,
+    marginBottom: 14, borderRadius: R.md,
     flexDirection: 'row', alignItems: 'center',
   },
   sectionBandAccent: {
@@ -254,7 +284,7 @@ const S = StyleSheet.create({
   },
   subHeadEsrs: {
     fontSize: 7, fontWeight: 'bold', color: ZED.green,
-    backgroundColor: ZED.greenLight, borderRadius: 3,
+    backgroundColor: ZED.greenLight, borderRadius: R.sm,
     paddingHorizontal: 5, paddingVertical: 2, marginRight: 8,
   },
   subHeadTitle: { fontSize: 9.5, fontWeight: 'bold', color: ZED.black, flex: 1 },
@@ -262,7 +292,7 @@ const S = StyleSheet.create({
   // ── KPI cards row ──
   kpiRow: { flexDirection: 'row', gap: 8, marginVertical: 8 },
   kpiCard: {
-    flex: 1, borderRadius: 6, padding: 10,
+    flex: 1, borderRadius: R.md, padding: 10,
     borderWidth: 1,
   },
   kpiLabel: { fontSize: 7.5, fontWeight: 'medium', color: ZED.gray600, marginBottom: 4 },
@@ -276,15 +306,15 @@ const S = StyleSheet.create({
     marginVertical: 3,
   },
   barLabel: { width: 160, fontSize: 8, color: ZED.gray800, paddingRight: 8 },
-  barTrack: { flex: 1, height: 10, backgroundColor: ZED.gray100, borderRadius: 3 },
-  barFill: { height: 10, borderRadius: 3 },
+  barTrack: { flex: 1, height: 10, backgroundColor: ZED.gray100, borderRadius: R.sm },
+  barFill: { height: 10, borderRadius: R.sm },
   barValue: { width: 60, fontSize: 8, fontWeight: 'medium', textAlign: 'right' },
 
   // ── Table ──
   tableHeader: {
     flexDirection: 'row', backgroundColor: ZED.navy,  // charcoal header
     paddingHorizontal: 8, paddingVertical: 7,
-    borderRadius: 2,
+    borderRadius: R.sm,
   },
   tableHeaderCell: { fontSize: 7.5, color: ZED.white, fontWeight: 'bold' },
   tableRow: { flexDirection: 'row', paddingHorizontal: 8, paddingVertical: 5 },
@@ -295,6 +325,8 @@ const S = StyleSheet.create({
     flexDirection: 'row', backgroundColor: ZED.greenLight,
     paddingHorizontal: 8, paddingVertical: 5,
     borderTopWidth: 1, borderTopColor: ZED.green + '44',
+    borderBottomLeftRadius: R.sm,
+    borderBottomRightRadius: R.sm,
   },
 
   // ── Prose ──
@@ -307,14 +339,14 @@ const S = StyleSheet.create({
   callout: {
     flexDirection: 'row', alignItems: 'flex-start',
     backgroundColor: ZED.greenLight,
-    borderRadius: 5, padding: 10, marginVertical: 6,
+    borderRadius: R.md, padding: 10, marginVertical: 6,
     borderLeftWidth: 3, borderLeftColor: ZED.accent,
   },
   calloutText: { flex: 1, fontSize: 8, lineHeight: 1.6, color: ZED.black },
 
   // ── Monthly heat grid ──
   monthCell: {
-    width: 36, height: 26, borderRadius: 3,
+    width: 36, height: 26, borderRadius: R.sm,
     alignItems: 'center', justifyContent: 'center',
   },
   monthLabel: { fontSize: 6.5, fontWeight: 'bold', color: ZED.gray600 },
@@ -322,32 +354,41 @@ const S = StyleSheet.create({
 
   // ── Target card ──
   targetCard: {
-    borderWidth: 1, borderColor: ZED.gray200, borderRadius: 6,
+    borderWidth: 1, borderColor: ZED.gray200, borderRadius: R.md,
     padding: 10, marginBottom: 8,
   },
   targetName: { fontSize: 9, fontWeight: 'bold', color: ZED.navy, marginBottom: 2 },
   targetMeta: { fontSize: 7.5, color: ZED.gray600, lineHeight: 1.6 },
-  progressTrack: { height: 8, backgroundColor: ZED.gray200, borderRadius: 4, marginTop: 6 },
-  progressFill: { height: 8, borderRadius: 4, backgroundColor: ZED.greenMid },
+  progressTrack: { height: 8, backgroundColor: ZED.gray200, borderRadius: R.sm, marginTop: 6 },
+  progressFill: { height: 8, borderRadius: R.sm, backgroundColor: ZED.greenMid },
 
   // ── Strategy card ──
   strategyRow: {
-    flexDirection: 'row', alignItems: 'flex-start',
-    marginBottom: 6, paddingBottom: 6,
-    borderBottomWidth: 0.5, borderBottomColor: ZED.gray200,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+    paddingBottom: 8,
+    borderBottomWidth: 0.5,
+    borderBottomColor: ZED.gray200,
   },
   strategyBadge: {
-    width: 28, height: 28, borderRadius: 4,
-    alignItems: 'center', justifyContent: 'center', marginRight: 8, flexShrink: 0,
+    width: 28,
+    height: 28,
+    borderRadius: R.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+    flexShrink: 0,
+    marginTop: 2,
   },
-  strategyTitle: { fontSize: 8.5, fontWeight: 'bold', color: ZED.navy, flex: 1 },
-  strategyMeta: { fontSize: 7.5, color: ZED.gray600, marginTop: 2 },
+  strategyTitle: { fontSize: 8.5, fontWeight: 'bold', color: ZED.navy, lineHeight: 1.35 },
+  strategyMeta: { fontSize: 7.5, color: ZED.gray600, marginTop: 3, lineHeight: 1.45 },
 
   // ── Declaration box ──
   declBox: {
     borderWidth: 1, borderColor: ZED.accent + '55',
     backgroundColor: ZED.greenLight,
-    borderRadius: 6, padding: 14, marginTop: 16,
+    borderRadius: R.md, padding: 14, marginTop: 16,
   },
   declTitle: { fontSize: 9, fontWeight: 'bold', color: ZED.green, marginBottom: 6 },
   declText: { fontSize: 8, lineHeight: 1.6, color: ZED.gray800 },
@@ -401,6 +442,7 @@ export interface PremiumReportData {
     location?: string;
     factor_source_name?: string;
     factor_source_year?: number;
+    emission_factor?: number;
   }[];
   scope3Calculations: {
     scope_category: number;
@@ -438,6 +480,11 @@ export interface PremiumReportData {
     change: number;
     changePercent: number;
   };
+  evidenceCoverage?: {
+    scope12Entries: number;
+    scope12WithEvidence: number;
+    coveragePercent: number;
+  };
   generatedBy?: string;
 }
 
@@ -460,9 +507,9 @@ function PageFooter({ year }: { year: number }) {
   return (
     <View style={S.pageFooter} fixed>
       <Text style={S.pageFooterText}>
-        CSRD — ESRS E1 Climate Change Disclosure · Отчетна година {year} · ZED Footprint Platform
+        EU CSRD · Климатични разкривания (ESRS E1) · Отчетна година {year} · {PDF_PLATFORM_NAME}
       </Text>
-      <Text style={S.pageFooterText} render={({ pageNumber, totalPages }) =>
+      <Text style={S.pageFooterPage} render={({ pageNumber, totalPages }) =>
         `${pageNumber} / ${totalPages}`
       } />
     </View>
@@ -525,7 +572,7 @@ function HBar({ label, value, max, color, pct }: {
   const barW = Math.max(0, Math.min(100, pct));
   return (
     <View style={S.barRow}>
-      <Text style={S.barLabel} numberOfLines={1}>{label}</Text>
+      <Text style={S.barLabel}>{label}</Text>
       <View style={S.barTrack}>
         <View style={[S.barFill, { width: `${barW}%`, backgroundColor: color }]} />
       </View>
@@ -543,7 +590,7 @@ function TableRow12({ row, isAlt, total }: {
   const sc = SCOPE_COLOR[row.scope as 1 | 2] ?? SCOPE_COLOR[1];
   return (
     <View style={[S.tableRow, isAlt ? S.tableRowAlt : {}]}>
-      <Text style={[S.tableCell, { flex: 2.2 }]} numberOfLines={1}>
+      <Text style={[S.tableCell, { flex: 2.2 }]}>
         {CAT_LABELS[row.category] ?? row.category}
       </Text>
       <Text style={[S.tableCell, { flex: 1.1, textAlign: 'right' }]}>
@@ -554,9 +601,9 @@ function TableRow12({ row, isAlt, total }: {
       </Text>
       {/* mini bar */}
       <View style={{ flex: 1.4, paddingHorizontal: 4, justifyContent: 'center' }}>
-        <View style={{ height: 7, backgroundColor: ZED.gray100, borderRadius: 2 }}>
+        <View style={{ height: 7, backgroundColor: ZED.gray100, borderRadius: R.sm }}>
           <View style={{
-            height: 7, borderRadius: 2,
+            height: 7, borderRadius: R.sm,
             width: `${Math.max(2, pct)}%`,
             backgroundColor: sc.solid,
           }} />
@@ -565,8 +612,8 @@ function TableRow12({ row, isAlt, total }: {
       <Text style={[S.tableCellBold, { flex: 1, textAlign: 'right' }]}>
         {row.calculated_co2e.toFixed(4)}
       </Text>
-      <Text style={[S.tableCell, { flex: 1, textAlign: 'center', color: ZED.gray400 }]}>
-        {row.factor_source_name ?? '—'}
+      <Text style={[S.tableCell, { flex: 1, textAlign: 'center', color: ZED.gray400, fontSize: 6.5 }]}>
+        {formatFactorCell(row)}
       </Text>
     </View>
   );
@@ -596,12 +643,9 @@ function CoverPage({ data, today }: { data: PremiumReportData; today: string }) 
               </Text>
             </View>
 
-            {/* Brand */}
-            <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
-              <Text style={S.coverZed}>ZED</Text>
-              <Text style={[S.coverZed, { color: ZED.accent, marginLeft: 2 }]}>.</Text>
-            </View>
-            <Text style={S.coverSubtitle}>CARBON FOOTPRINT PLATFORM</Text>
+            <Text style={{ fontSize: 11, color: '#ECFDF5', lineHeight: 1.45, maxWidth: 420 }}>
+              {PDF_PLATFORM_NAME}
+            </Text>
 
             <View style={S.coverDivider} />
 
@@ -657,7 +701,7 @@ function CoverPage({ data, today }: { data: PremiumReportData; today: string }) 
           {/* Footer */}
           <View style={S.coverFooter}>
             <Text style={S.coverFooterLeft}>
-              {'Изготвен от: ' + (data.generatedBy ?? 'ZED Platform') + '\n'}
+              {'Изготвен от: ' + (data.generatedBy ?? PDF_PLATFORM_NAME) + '\n'}
               {'Дата: ' + today + '\n'}
               {'Регламент (ЕС) 2023/2772 — ESRS E1'}
             </Text>
@@ -699,13 +743,13 @@ function ExecutiveSummaryPage({ data, scope1, scope2, scope3Tons, grandTotal }: 
         {/* KPI row */}
         <View style={S.kpiRow}>
           <KpiCard label="Обхват 1 — Директни" value={scope1.toFixed(2)}
-            unit="tCO₂e" color={ZED.green} bg={ZED.greenLight} />
+            unit="tCO2e" color={ZED.green} bg={ZED.greenLight} />
           <KpiCard label="Обхват 2 — Закупена енергия" value={scope2.toFixed(2)}
-            unit="tCO₂e" color={ZED.blue} bg={ZED.blueLight} />
+            unit="tCO2e" color={ZED.blue} bg={ZED.blueLight} />
           <KpiCard label="Обхват 3 — Верига" value={scope3Tons > 0 ? scope3Tons.toFixed(2) : 'Н/Д'}
-            unit="tCO₂e" color={ZED.orange} bg={ZED.orangeLight} />
+            unit="tCO2e" color={ZED.orange} bg={ZED.orangeLight} />
           <KpiCard label="ОБЩО БРУТНИ ЕМИСИИ" value={grandTotal.toFixed(2)}
-            unit="tCO₂e" color={ZED.navy} bg={ZED.navyLight}
+            unit="tCO2e" color={ZED.navy} bg={ZED.navyLight}
             change={yoyText} changePositive={yoyPositive} />
         </View>
 
@@ -722,19 +766,19 @@ function ExecutiveSummaryPage({ data, scope1, scope2, scope3Tons, grandTotal }: 
           <>
             <SubHead esrs="E1-6 §48" title="Сравнение с предходна година" />
             <View style={{ flexDirection: 'row', gap: 8, marginVertical: 6 }}>
-              <View style={{ flex: 1, backgroundColor: ZED.gray100, borderRadius: 5, padding: 10 }}>
+              <View style={{ flex: 1, backgroundColor: ZED.gray100, borderRadius: R.md, padding: 10 }}>
                 <Text style={{ fontSize: 7.5, color: ZED.gray600, marginBottom: 3 }}>
                   {data.reportingYear - 1} г.
                 </Text>
                 <Text style={{ fontSize: 16, fontWeight: 'bold', color: ZED.gray800 }}>
                   {cd.previousYear.toFixed(2)}
                 </Text>
-                <Text style={{ fontSize: 7, color: ZED.gray400 }}>tCO₂e</Text>
+                <Text style={{ fontSize: 7, color: ZED.gray400 }}>tCO2e</Text>
               </View>
               <View style={{
                 flex: 1,
                 backgroundColor: cd.change <= 0 ? ZED.greenLight : ZED.orangeLight,
-                borderRadius: 5, padding: 10,
+                borderRadius: R.md, padding: 10,
                 borderWidth: 1,
                 borderColor: cd.change <= 0 ? ZED.green : ZED.orange,
               }}>
@@ -750,14 +794,14 @@ function ExecutiveSummaryPage({ data, scope1, scope2, scope3Tons, grandTotal }: 
                   {cd.change <= 0 ? 'намаление' : 'увеличение'}
                 </Text>
               </View>
-              <View style={{ flex: 1, backgroundColor: ZED.navyLight, borderRadius: 5, padding: 10 }}>
+              <View style={{ flex: 1, backgroundColor: ZED.navyLight, borderRadius: R.md, padding: 10 }}>
                 <Text style={{ fontSize: 7.5, color: ZED.navyMid, marginBottom: 3 }}>
                   {data.reportingYear} г.
                 </Text>
                 <Text style={{ fontSize: 16, fontWeight: 'bold', color: ZED.navy }}>
                   {grandTotal.toFixed(2)}
                 </Text>
-                <Text style={{ fontSize: 7, color: ZED.gray400 }}>tCO₂e</Text>
+                <Text style={{ fontSize: 7, color: ZED.gray400 }}>tCO2e</Text>
               </View>
             </View>
           </>
@@ -779,12 +823,9 @@ function ExecutiveSummaryPage({ data, scope1, scope2, scope3Tons, grandTotal }: 
   );
 }
 
-// ── Scope 1 & 2 ────────────────────────────────────────────────────────────
-function Scope12Page({ data, scope1, scope2 }: {
-  data: PremiumReportData; scope1: number; scope2: number;
-}) {
+// ── Scope 1 ────────────────────────────────────────────────────────────────
+function Scope1Page({ data, scope1 }: { data: PremiumReportData; scope1: number }) {
   const s1rows = data.scope12Emissions.filter(e => e.scope === 1);
-  const s2rows = data.scope12Emissions.filter(e => e.scope === 2);
 
   const ColHeader = ({ label, flex, align = 'left' }: {
     label: string; flex: number; align?: string;
@@ -800,7 +841,7 @@ function Scope12Page({ data, scope1, scope2 }: {
       <ColHeader label="Количество" flex={1.1} align="right" />
       <ColHeader label="Единица" flex={0.7} align="center" />
       <ColHeader label="Дял" flex={1.4} align="center" />
-      <ColHeader label="tCO₂e" flex={1} align="right" />
+      <ColHeader label="tCO2e" flex={1} align="right" />
       <ColHeader label="Фактор" flex={1} align="center" />
     </View>
   );
@@ -808,16 +849,16 @@ function Scope12Page({ data, scope1, scope2 }: {
   return (
     <Page size="A4" style={S.page}>
       <PageHeader company={data.company.company_name} year={data.reportingYear}
-        section="ОБХВАТ 1 & 2 — ДИРЕКТНИ И ЗАКУПЕНА ЕНЕРГИЯ" />
+        section="ОБХВАТ 1 — ДИРЕКТНИ ЕМИСИИ" />
       <View style={S.pageInner}>
         <SectionBand label="2. ОБХВАТ 1 — ДИРЕКТНИ ЕМИСИИ (E1-6 §44)" />
         <SubHead esrs="E1-6 §44" title="Разбивка по категория" />
         <Para>
           Обхват 1 включва директни емисии от горивни и технологични процеси под оперативния
-          контрол на организацията. Включва CO₂, CH4, N₂O, HFCs (изразени в CO₂e, GWP100, AR6).
+          контрол на организацията. Включва CO2, CH4, N2O, HFCs (изразени в CO2e, GWP100, AR6).
         </Para>
         <View style={S.kpiRow}>
-          <KpiCard label="Общо Обхват 1" value={scope1.toFixed(3)} unit="tCO₂e"
+          <KpiCard label="Общо Обхват 1" value={scope1.toFixed(3)} unit="tCO2e"
             color={ZED.green} bg={ZED.greenLight} />
           <KpiCard label="Брой записи" value={String(s1rows.length)} unit="дейности"
             color={ZED.gray600} bg={ZED.gray100} />
@@ -830,7 +871,7 @@ function Scope12Page({ data, scope1, scope2 }: {
               <TableRow12 key={row.reporting_period + row.category + i}
                 row={row} isAlt={i % 2 !== 0} total={scope1} />
             ))}
-            <View style={S.tableFooter}>
+            <View style={S.tableFooter} wrap={false} minPresenceAhead={48}>
               <Text style={[S.tableCellBold, { flex: 2.2 }]}>ОБЩО Обхват 1</Text>
               <Text style={{ flex: 1.1 }} />
               <Text style={{ flex: 0.7 }} />
@@ -849,10 +890,41 @@ function Scope12Page({ data, scope1, scope2 }: {
             </Text>
           </View>
         )}
+      </View>
+      <PageFooter year={data.reportingYear} />
+    </Page>
+  );
+}
 
-        <View style={{ marginTop: 16 }}>
-          <SectionBand label="3. ОБХВАТ 2 — ЗАКУПЕНА ЕНЕРГИЯ (E1-6 §45)" />
-        </View>
+// ── Scope 2 ────────────────────────────────────────────────────────────────
+function Scope2Page({ data, scope2 }: { data: PremiumReportData; scope2: number }) {
+  const s2rows = data.scope12Emissions.filter(e => e.scope === 2);
+
+  const ColHeader = ({ label, flex, align = 'left' }: {
+    label: string; flex: number; align?: string;
+  }) => (
+    <Text style={[S.tableHeaderCell, { flex, textAlign: align as 'left' | 'right' | 'center' }]}>
+      {label}
+    </Text>
+  );
+
+  const TableHead = () => (
+    <View style={S.tableHeader}>
+      <ColHeader label="Категория" flex={2.2} />
+      <ColHeader label="Количество" flex={1.1} align="right" />
+      <ColHeader label="Единица" flex={0.7} align="center" />
+      <ColHeader label="Дял" flex={1.4} align="center" />
+      <ColHeader label="tCO2e" flex={1} align="right" />
+      <ColHeader label="Фактор" flex={1} align="center" />
+    </View>
+  );
+
+  return (
+    <Page size="A4" style={S.page}>
+      <PageHeader company={data.company.company_name} year={data.reportingYear}
+        section="ОБХВАТ 2 — ЗАКУПЕНА ЕНЕРГИЯ" />
+      <View style={S.pageInner}>
+        <SectionBand label="3. ОБХВАТ 2 — ЗАКУПЕНА ЕНЕРГИЯ (E1-6 §45)" />
         <SubHead esrs="E1-6 §45" title="Метод на местоположение (Location-based)" />
         <Para>
           Обхват 2 обхваща емисиите от производството на закупена електроенергия, топлоенергия
@@ -860,7 +932,7 @@ function Scope12Page({ data, scope1, scope2 }: {
           При наличие на договорни инструменти (GoO/RECs) ще бъдат включени и пазарно-базирани данни.
         </Para>
         <View style={S.kpiRow}>
-          <KpiCard label="Общо Обхват 2" value={scope2.toFixed(3)} unit="tCO₂e (location-based)"
+          <KpiCard label="Общо Обхват 2" value={scope2.toFixed(3)} unit="tCO2e (location-based)"
             color={ZED.blue} bg={ZED.blueLight} />
           <KpiCard label="Брой записи" value={String(s2rows.length)} unit="дейности"
             color={ZED.gray600} bg={ZED.gray100} />
@@ -872,7 +944,7 @@ function Scope12Page({ data, scope1, scope2 }: {
               <TableRow12 key={row.reporting_period + row.category + i}
                 row={row} isAlt={i % 2 !== 0} total={scope2} />
             ))}
-            <View style={S.tableFooter}>
+            <View style={S.tableFooter} wrap={false} minPresenceAhead={48}>
               <Text style={[S.tableCellBold, { flex: 2.2 }]}>ОБЩО Обхват 2</Text>
               <Text style={{ flex: 1.1 }} />
               <Text style={{ flex: 0.7 }} />
@@ -912,7 +984,7 @@ function Scope3Page({ data, scope3Tons }: { data: PremiumReportData; scope3Tons:
         <SectionBand label="4. ОБХВАТ 3 — ВЕРИГА НА СТОЙНОСТТА (E1-6 §51)" />
 
         <View style={S.kpiRow}>
-          <KpiCard label="Общо Обхват 3" value={scope3Tons.toFixed(3)} unit="tCO₂e"
+          <KpiCard label="Общо Обхват 3" value={scope3Tons.toFixed(3)} unit="tCO2e"
             color={ZED.orange} bg={ZED.orangeLight} />
           <KpiCard label="Покрити категории" value={String(Object.keys(byCategory).length)}
             unit="от 5 планирани" color={ZED.gray600} bg={ZED.gray100} />
@@ -947,23 +1019,23 @@ function Scope3Page({ data, scope3Tons }: { data: PremiumReportData; scope3Tons:
               <Text style={[S.tableHeaderCell, { flex: 1.5 }]}>Описание</Text>
               <Text style={[S.tableHeaderCell, { flex: 0.8, textAlign: 'right' }]}>EUR</Text>
               <Text style={[S.tableHeaderCell, { flex: 1.3 }]}>Категория</Text>
-              <Text style={[S.tableHeaderCell, { flex: 0.9, textAlign: 'right' }]}>kg CO₂e</Text>
+              <Text style={[S.tableHeaderCell, { flex: 0.9, textAlign: 'right' }]}>kg CO2e</Text>
               <Text style={[S.tableHeaderCell, { flex: 0.7, textAlign: 'center' }]}>Ниво</Text>
             </View>
             {top10.map((c, i) => {
               const tr = c.calculation_trace ?? {};
               return (
                 <View key={i} style={[S.tableRow, i % 2 !== 0 ? S.tableRowAlt : {}]}>
-                  <Text style={[S.tableCell, { flex: 1.5 }]} numberOfLines={1}>
+                  <Text style={[S.tableCell, { flex: 1.5 }]}>
                     {tr.supplier ?? '—'}
                   </Text>
-                  <Text style={[S.tableCell, { flex: 1.5 }]} numberOfLines={1}>
+                  <Text style={[S.tableCell, { flex: 1.5 }]}>
                     {tr.description ?? '—'}
                   </Text>
                   <Text style={[S.tableCell, { flex: 0.8, textAlign: 'right' }]}>
                     {tr.amount != null ? tr.amount.toFixed(0) : '—'}
                   </Text>
-                  <Text style={[S.tableCell, { flex: 1.3 }]} numberOfLines={1}>
+                  <Text style={[S.tableCell, { flex: 1.3 }]}>
                     {S3_LABELS[c.scope_category]?.replace('Кат. ', 'К.') ?? `К.${c.scope_category}`}
                   </Text>
                   <Text style={[S.tableCellBold, { flex: 0.9, textAlign: 'right', color: ZED.orange }]}>
@@ -1089,7 +1161,7 @@ function MonthlyPage({ data }: { data: PremiumReportData }) {
             { color: ZED.gray100, textColor: ZED.gray400, label: 'Бъдещ период' },
           ].map(lg => (
             <View key={lg.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <View style={{ width: 12, height: 12, backgroundColor: lg.color, borderRadius: 2 }} />
+              <View style={{ width: 12, height: 12, backgroundColor: lg.color, borderRadius: R.sm }} />
               <Text style={{ fontSize: 7, color: ZED.gray600 }}>{lg.label}</Text>
             </View>
           ))}
@@ -1138,7 +1210,7 @@ function TargetsPage({ data }: { data: PremiumReportData }) {
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <Text style={[S.targetName, { flex: 1 }]}>{t.name}</Text>
                   <View style={{
-                    backgroundColor: ZED.navyLight, borderRadius: 3,
+                    backgroundColor: ZED.navyLight, borderRadius: R.sm,
                     paddingHorizontal: 6, paddingVertical: 2,
                   }}>
                     <Text style={{ fontSize: 7, color: ZED.navy, fontWeight: 'bold' }}>
@@ -1184,10 +1256,10 @@ function TargetsPage({ data }: { data: PremiumReportData }) {
               <KpiCard
                 label="Планирано намаление"
                 value={activeS.reduce((s, r) => s + (r.estimated_reduction_co2e ?? 0), 0).toFixed(1)}
-                unit="tCO₂e/год (очаквано)" color={ZED.navyMid} bg={ZED.navyLight} />
+                unit="tCO2e/год (очаквано)" color={ZED.navyMid} bg={ZED.navyLight} />
             </View>
             {activeS.slice(0, 8).map((s, i) => (
-              <View key={i} style={S.strategyRow}>
+              <View key={i} style={S.strategyRow} wrap={false}>
                 <View style={[S.strategyBadge, {
                   backgroundColor: i % 2 === 0 ? ZED.greenLight : ZED.navyLight,
                 }]}>
@@ -1197,14 +1269,18 @@ function TargetsPage({ data }: { data: PremiumReportData }) {
                   </Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={S.strategyTitle} numberOfLines={1}>{s.title}</Text>
+                  <Text style={S.strategyTitle}>{s.title}</Text>
                   <Text style={S.strategyMeta}>
-                    {s.category}
-                    {s.estimated_reduction_co2e
-                      ? `  ·  Очакване: ${s.estimated_reduction_co2e} tCO₂e/год`
-                      : ''}
-                    {s.responsible_person ? `  ·  ${s.responsible_person}` : ''}
+                    {STRATEGY_CAT_LABELS[s.category] ?? s.category}
                   </Text>
+                  {s.estimated_reduction_co2e ? (
+                    <Text style={S.strategyMeta}>
+                      {`Очаквано намаление: ${s.estimated_reduction_co2e} tCO2e/год`}
+                    </Text>
+                  ) : null}
+                  {s.responsible_person ? (
+                    <Text style={S.strategyMeta}>{`Отговорник: ${s.responsible_person}`}</Text>
+                  ) : null}
                 </View>
               </View>
             ))}
@@ -1221,11 +1297,11 @@ function TargetsPage({ data }: { data: PremiumReportData }) {
 // ── Methodology & Declaration ──────────────────────────────────────────────
 function MethodologyPage({ data, today }: { data: PremiumReportData; today: string }) {
   const methRows: [string, string][] = [
-    ['Обхват 1 & 2', 'Измерени/отчетени количества × емисионен фактор (kg CO₂e/ед.). DEFRA 2024, БАЕ.'],
-    ['Обхват 3 Кат. 1', 'EXIOBASE v3 (2023) EEIO фактори — EUR разходи × фактор = kg CO₂e (Ниво C).'],
+    ['Обхват 1 & 2', 'Измерени/отчетени количества × емисионен фактор (kg CO2e/ед.). DEFRA 2024, БАЕ.'],
+    ['Обхват 3 Кат. 1', 'EXIOBASE v3 (2023) EEIO фактори — EUR разходи × фактор = kg CO2e (Ниво C).'],
     ['Обхват 3 Кат. 4/5', 'DEFRA 2024 — тонокилометри / разходи × транспортни и отпадъчни фактори.'],
     ['Обхват 3 Кат. 6/7', 'DEFRA 2024 — пътнически км / разходи × транспортни фактори.'],
-    ['GWP стойности',     'IPCC AR6 (100 год.) — CO₂=1, CH₄=27.9, N₂O=273, R-134a=1430, R-404A=3922.'],
+    ['GWP стойности',     'IPCC AR6 (100 год.) — CO2=1, CH₄=27.9, N2O=273, R-134a=1430, R-404A=3922.'],
     ['Консолидация',      'Оперативен контрол — 100% от дейностите под контрол на организацията.'],
     ['Електроенергия',    'Метод на местоположение — Българска Агенция по Енергетика 2024: 0.478 kg/kWh.'],
   ];
@@ -1256,9 +1332,25 @@ function MethodologyPage({ data, today }: { data: PremiumReportData; today: stri
         <Bullet>Мерки: Събиране на физически данни за Топ 10 доставчика; преход към Ниво B.</Bullet>
 
         <SubHead esrs="ESRS 2 §120" title="Вътрешен контрол и верификация" />
-        <Bullet>Данните се въвеждат от отговорно лице и се преглеждат от ръководството (4-очно правило).</Bullet>
-        <Bullet>Архивиране на първичните документи (фактури, измервания) минимум 5 години.</Bullet>
-        <Bullet>Пълна одитна следа — всеки CO₂e запис е проследим до конкретен емисионен фактор.</Bullet>
+        {data.evidenceCoverage && data.evidenceCoverage.scope12Entries > 0 ? (
+          data.evidenceCoverage.coveragePercent >= 50 ? (
+            <Bullet>
+              {`Документални доказателства: ${data.evidenceCoverage.coveragePercent}% от Обхват 1+2 записите (${data.evidenceCoverage.scope12WithEvidence}/${data.evidenceCoverage.scope12Entries}) имат прикачен източник.`}
+            </Bullet>
+          ) : (
+            <Bullet>
+              {`Покритие с доказателства: ${data.evidenceCoverage.coveragePercent}% — препоръчва се прикачване на фактури и измервания (${data.evidenceCoverage.scope12WithEvidence}/${data.evidenceCoverage.scope12Entries}).`}
+            </Bullet>
+          )
+        ) : (
+          <Bullet>Препоръчва се прикачване на първични документи (фактури, измервания) към емисионните записи.</Bullet>
+        )}
+        <Bullet>Препоръчва се преглед от второ отговорно лице (4-очно правило) преди публикуване на отчета.</Bullet>
+        <Bullet>Препоръчва се архивиране на първични документи (фактури, измервания) минимум 5 години.</Bullet>
+        <Bullet>
+          Проследимост на фактори: записите с посочен емисионен фактор и източник са проследими в платформата;
+          записи без фактор изискват допълнителна документация.
+        </Bullet>
         <Para>
           Статус на верификация: Настоящият отчет не е подложен на независима трета-страна
           верификация. Планира се ограничена (limited assurance) верификация по ISAE 3410 за
@@ -1269,7 +1361,7 @@ function MethodologyPage({ data, today }: { data: PremiumReportData; today: stri
         <View style={S.declBox}>
           <Text style={S.declTitle}>Декларация за съответствие с ESRS E1</Text>
           <Text style={S.declText}>
-            {`Настоящото разкриване е изготвено в съответствие с изискванията на ESRS E1 (Регламент (ЕС) 2023/2772) и GHG Protocol Corporate Standard. Данните са верни и точни към датата на изготвяне.\n\nОтчетна година: ${data.reportingYear} г.  ·  Изготвил: ${data.generatedBy ?? 'ZED Platform'}  ·  Дата: ${today}`}
+            {`Настоящото разкриване е подготвено по изискванията на ESRS E1 (Регламент (ЕС) 2023/2772) и GHG Protocol Corporate Standard. Данните отразяват наличната информация към датата на изготвяне и не са независимо верифицирани.\n\nОтчетна година: ${data.reportingYear} г.  ·  Изготвил: ${data.generatedBy ?? PDF_PLATFORM_NAME}  ·  Дата: ${today}`}
           </Text>
           <View style={S.declSig}>
             <View style={S.sigBlock}>
@@ -1295,15 +1387,12 @@ function BackPage({ data, today }: { data: PremiumReportData; today: string }) {
         <View style={S.coverAccentBar} />
         <View style={S.coverTopStrip} />
         <View style={S.backContent}>
-          {/* ZED with accent dot */}
-          <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
-            <Text style={S.backZed}>ZED</Text>
-            <Text style={[S.backZed, { color: ZED.accent }]}>.</Text>
-          </View>
-          <Text style={S.backTagline}>CARBON FOOTPRINT PLATFORM</Text>
+          <Text style={{ fontSize: 11, color: '#FFFFFF', lineHeight: 1.45, maxWidth: 420 }}>
+            {PDF_PLATFORM_NAME}
+          </Text>
           <View style={S.backDivider} />
           <Text style={S.backDisclaimer}>
-            {`Настоящият отчет е изготвен автоматично от ZED Footprint Platform въз основа на въведени данни. Изчисленията следват GHG Protocol Corporate Standard и ESRS E1 (Регламент (ЕС) 2023/2772).\n\nПри използване на данните в публични комуникации препоръчваме потвърждение от независим верификатор (ISAE 3410 / ISO 14064-3).\n\nZED не носи отговорност за неточности, произтичащи от грешни входни данни.`}
+            {`Настоящият отчет е изготвен автоматично от ${PDF_PLATFORM_NAME} въз основа на предоставени данни. Изчисленията следват GHG Protocol Corporate Standard и ESRS E1 (Регламент (ЕС) 2023/2772).\n\nПри използване на данните в публични комуникации препоръчваме потвърждение от независим верификатор (ISAE 3410 / ISO 14064-3).\n\nГенериращият софтуер не носи отговорност за неточности, произтичащи от грешни входни данни.`}
           </Text>
           <Text style={S.backMeta}>
             {`${data.company.company_name}  ·  ${data.reportingYear} г.  ·  Генериран: ${today}`}
@@ -1331,15 +1420,16 @@ function ZedReport({ data, today }: { data: PremiumReportData; today: string }) 
   return (
     <Document
       title={`CSRD ESRS E1 — ${data.company.company_name} — ${data.reportingYear}`}
-      author={data.generatedBy ?? 'ZED Platform'}
+      author={data.generatedBy ?? PDF_PLATFORM_NAME}
       subject="CSRD Climate Change Disclosure — ESRS E1"
       keywords="CSRD, ESRS E1, GHG Protocol, carbon footprint, sustainability"
-      creator="ZED Footprint Platform"
+      creator={PDF_PLATFORM_NAME}
     >
       <CoverPage data={data} today={today} />
       <ExecutiveSummaryPage data={data} scope1={scope1} scope2={scope2}
         scope3Tons={scope3Tons} grandTotal={grandTotal} />
-      <Scope12Page data={data} scope1={scope1} scope2={scope2} />
+      <Scope1Page data={data} scope1={scope1} />
+      <Scope2Page data={data} scope2={scope2} />
       {hasScope3 && <Scope3Page data={data} scope3Tons={scope3Tons} />}
       <MonthlyPage data={data} />
       <TargetsPage data={data} />
@@ -1359,6 +1449,6 @@ export async function generatePremiumCSRDReport(data: PremiumReportData): Promis
   });
 
   const element = React.createElement(ZedReport, { data, today });
-  const pdfBytes = await renderToBuffer(element);
+  const pdfBytes = await renderToBuffer(element as React.ReactElement<DocumentProps>);
   return Buffer.from(pdfBytes);
 }

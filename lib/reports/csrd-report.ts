@@ -1,5 +1,6 @@
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
+import { PDF_PLATFORM_NAME } from './pdf-text';
 
 interface CSRDReportData {
   company: any;
@@ -117,7 +118,7 @@ export async function generateCSRDReport(data: CSRDReportData): Promise<Uint8Arr
   });
   drawText('Обхват', 60, yPosition, 10, boldFont);
   drawText('Описание', 200, yPosition, 10, boldFont);
-  drawText('tCO₂e', 450, yPosition, 10, boldFont);
+  drawText('tCO2e', 450, yPosition, 10, boldFont);
   yPosition -= 25;
 
   // Scope 1
@@ -169,8 +170,8 @@ export async function generateCSRDReport(data: CSRDReportData): Promise<Uint8Arr
     yPosition -= 20;
     
     const changeText = data.comparisonData.change >= 0 
-      ? `Увеличение с ${data.comparisonData.change.toFixed(2)} tCO₂e (${data.comparisonData.changePercent.toFixed(1)}%)`
-      : `Намаление с ${Math.abs(data.comparisonData.change).toFixed(2)} tCO₂e (${Math.abs(data.comparisonData.changePercent).toFixed(1)}%)`;
+      ? `Увеличение с ${data.comparisonData.change.toFixed(2)} tCO2e (${data.comparisonData.changePercent.toFixed(1)}%)`
+      : `Намаление с ${Math.abs(data.comparisonData.change).toFixed(2)} tCO2e (${Math.abs(data.comparisonData.changePercent).toFixed(1)}%)`;
     
     drawText(changeText, 50, yPosition, 10, customFont, 
       data.comparisonData.change >= 0 ? rgb(0.8, 0.2, 0.2) : rgb(0.2, 0.6, 0.2));
@@ -203,7 +204,7 @@ export async function generateCSRDReport(data: CSRDReportData): Promise<Uint8Arr
       const label = categoryLabels[category] || category;
       const percent = (value / data.totalEmissions.total * 100).toFixed(1);
       drawText(`${label}:`, 60, yPosition, 10);
-      drawText(`${value.toFixed(2)} tCO₂e (${percent}%)`, 350, yPosition, 10);
+      drawText(`${value.toFixed(2)} tCO2e (${percent}%)`, 350, yPosition, 10);
       yPosition -= 18;
     });
 
@@ -256,7 +257,7 @@ export async function generateCSRDReport(data: CSRDReportData): Promise<Uint8Arr
       
       const targetDesc = target.target_type === 'percentage'
         ? `Намаление с ${target.target_value}% до ${target.target_year} г. (базова година: ${target.baseline_year})`
-        : `Постигане на ${target.target_value} tCO₂e до ${target.target_year} г.`;
+        : `Постигане на ${target.target_value} tCO2e до ${target.target_year} г.`;
       
       drawText(targetDesc, 70, yPosition, 9);
       yPosition -= 18;
@@ -332,7 +333,7 @@ export async function generateCSRDReport(data: CSRDReportData): Promise<Uint8Arr
     day: 'numeric',
   });
   drawText(`Генериран на: ${generatedDate}`, 50, yPosition, 8, customFont, rgb(0.5, 0.5, 0.5));
-  drawText('Система: ZED Въглероден отпечатък', width - 200, yPosition, 8, customFont, rgb(0.5, 0.5, 0.5));
+  drawText(`Система: ${PDF_PLATFORM_NAME}`, width - 200, yPosition, 8, customFont, rgb(0.5, 0.5, 0.5));
 
   return await pdfDoc.save();
 }

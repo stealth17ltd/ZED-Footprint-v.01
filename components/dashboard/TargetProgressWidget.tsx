@@ -159,7 +159,7 @@ export default function TargetProgressWidget() {
                     </span>
                   )}
                   {isSBTiAligned && (
-                    <Award className="h-3.5 w-3.5 text-emerald-500 shrink-0" title="SBTi aligned" />
+                    <Award className="h-3.5 w-3.5 text-emerald-500 shrink-0" aria-label="SBTi aligned" />
                   )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">

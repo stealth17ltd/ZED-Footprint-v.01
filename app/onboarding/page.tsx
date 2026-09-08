@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,10 +10,13 @@ import { Badge } from '@/components/ui/badge';
 import {
   ChevronRight, ChevronLeft, X, CheckCircle2, ArrowRight,
   Zap, Target, Building2, Download, Lightbulb, TrendingDown,
-  ShieldCheck, BarChart3, Sparkles, ListChecks,
+  ShieldCheck, BarChart3, Sparkles, ListChecks, Factory,
 } from 'lucide-react';
 import Link from 'next/link';
+import { toast } from 'sonner';
 import { ZedLogo } from '@/components/ui/zed-logo';
+import { EuEtsGuidancePanel } from '@/components/guidance/EuEtsGuidancePanel';
+import { GuidanceHint, LabelWithGuidance } from '@/components/guidance/GuidanceHint';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Step configuration — add new steps here to extend the wizard
@@ -42,6 +45,13 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
     optional: false,
   },
   {
+    id: 'compliance',
+    title: 'Регулаторен скрининг',
+    subtitle: 'Оборот, CSRD обхват и EU ETS въпросник',
+    emoji: '🛡️',
+    optional: true,
+  },
+  {
     id: 'scope12',
     title: 'Обхват 1 & 2 — Директни емисии',
     subtitle: 'Горива, ток, топлоенергия',
@@ -64,7 +74,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   },
   {
     id: 'strategies',
-    title: 'Стратегии за намаляване',
+    title: 'Стратегии и планиране',
     subtitle: '12 готови шаблона — изберете и персонализирайте',
     emoji: '💡',
     optional: true,
@@ -96,6 +106,10 @@ interface CompanyData {
   industry_sector: string;
   employee_count: number | null;
   baseline_year: number | null;
+  annual_turnover_eur: number | null;
+  ets_has_installation: boolean | null;
+  ets_thermal_input_mw: number | null;
+  ets_activity_annex_i: boolean | null;
 }
 
 interface StepProps {
@@ -125,9 +139,10 @@ function StepWelcome({ firstName, company, isGuideMode }: StepProps) {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-sm">
         {[
           { icon: '🏢', label: 'Профил', desc: '2 мин' },
+          { icon: '🛡️', label: 'Скрининг', desc: '2 мин' },
           { icon: '⚡', label: 'Данни 1&2', desc: '3 мин' },
           { icon: '🎯', label: 'Цели', desc: '2 мин' },
           { icon: '💡', label: 'Стратегии', desc: '3 мин' },
@@ -159,7 +174,7 @@ function StepWelcome({ firstName, company, isGuideMode }: StepProps) {
             icon: <ShieldCheck className="h-5 w-5 text-blue-500" />,
             bg: 'bg-blue-50 border-blue-200',
             title: 'CSRD & GDPR',
-            desc: 'Отчети по ESRS E1, SBTi цели и пълен GDPR контрол на данните.',
+            desc: 'Версиониран rule engine, EU ETS скрининг, ESRS E1 отчети и GDPR контрол.',
           },
         ].map(item => (
           <div key={item.title} className={`rounded-xl border p-4 ${item.bg}`}>
@@ -174,7 +189,7 @@ function StepWelcome({ firstName, company, isGuideMode }: StepProps) {
 
       <div className="bg-earth-50 border border-earth-200 rounded-xl p-4 text-sm text-earth-700 text-left">
         <p className="font-semibold mb-1">🌍 Защо Carbon Footprint сега?</p>
-        <p>Клиентите, банките и тендерите все по-често изискват ESG данни. CSRD вече засяга компании с над 250 служители — имайки профил готов ви дава конкурентно предимство.</p>
+        <p>Клиенти, банки и възложители все по-често изискват ESG данни. Готовият Carbon Footprint профил ви помага да сте подготвени за новите изисквания и ви дава реално конкурентно предимство.</p>
       </div>
     </div>
   );
@@ -249,6 +264,131 @@ function StepCompany({ company, setCompany }: StepProps) {
           </Select>
           <p className="text-xs text-gray-400 mt-1">Спрямо тази година се измерват целите за намаление</p>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function StepCompliance({ company, setCompany }: StepProps) {
+  return (
+    <div className="space-y-5 max-w-md mx-auto">
+      <div className="text-center">
+        <div className="text-5xl mb-3">🛡️</div>
+        <p className="text-sm text-gray-500">
+          Тези данни определят <strong>CSRD обхвата</strong> и <strong>EU ETS скрининга</strong>.
+          Можете да ги промените по всяко време от Настройки.
+        </p>
+      </div>
+
+      <div className="bg-white rounded-xl border border-emerald-200 p-6 space-y-5 shadow-sm">
+        <div>
+          <LabelWithGuidance
+            label="Годишен оборот (EUR)"
+            guidanceKey="csrdTurnover"
+          />
+          <Input
+            type="number"
+            min="0"
+            className="mt-1"
+            placeholder="напр. 2500000"
+            value={company.annual_turnover_eur ?? ''}
+            onChange={e => setCompany(c => ({
+              ...c,
+              annual_turnover_eur: e.target.value ? parseFloat(e.target.value) : null,
+            }))}
+          />
+          <p className="text-xs text-gray-400 mt-1">
+            CSRD задължителен обхват: &gt;1000 служители <em>и</em> &gt;€450M (вер. 2026-02-EU)
+          </p>
+        </div>
+
+        <div className="border-t pt-4 space-y-4">
+          <div className="flex items-center gap-2">
+            <Factory className="h-4 w-4 text-blue-600" />
+            <p className="text-sm font-semibold text-gray-700">EU ETS скрининг</p>
+            <GuidanceHint guidanceKey="euEts" />
+          </div>
+
+          <EuEtsGuidancePanel />
+
+          <div>
+            <LabelWithGuidance
+              label="Оперира ли инсталация по EU ETS?"
+              guidanceKey="installation"
+            />
+            <Select
+              value={
+                company.ets_has_installation === true ? 'yes'
+                  : company.ets_has_installation === false ? 'no'
+                    : 'unknown'
+              }
+              onValueChange={v => setCompany(c => ({
+                ...c,
+                ets_has_installation: v === 'yes' ? true : v === 'no' ? false : null,
+              }))}
+            >
+              <SelectTrigger className="mt-1">
+                <SelectValue placeholder="Изберете..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unknown">Не знам / не е попълнено</SelectItem>
+                <SelectItem value="yes">Да — има инсталация</SelectItem>
+                <SelectItem value="no">Не — няма инсталация</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <LabelWithGuidance
+              label="Топлинен вход на горене (MW)"
+              guidanceKey="thermalInputMw"
+            />
+            <Input
+              type="number"
+              min="0"
+              step="0.1"
+              className="mt-1"
+              placeholder="напр. 15.5"
+              value={company.ets_thermal_input_mw ?? ''}
+              onChange={e => setCompany(c => ({
+                ...c,
+                ets_thermal_input_mw: e.target.value ? parseFloat(e.target.value) : null,
+              }))}
+            />
+            <p className="text-xs text-gray-400 mt-1">Праг ≥20 MW → препоръчва се експертен преглед</p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              id="onb_ets_annex"
+              type="checkbox"
+              checked={company.ets_activity_annex_i === true}
+              onChange={e => setCompany(c => ({
+                ...c,
+                ets_activity_annex_i: e.target.checked ? true : false,
+              }))}
+              className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+            />
+            <label htmlFor="onb_ets_annex" className="text-sm text-gray-700">
+              Дейност по Annex I на EU ETS
+            </label>
+            <GuidanceHint guidanceKey="annexI" />
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm text-emerald-800">
+        <p className="font-semibold mb-1">📊 Жив преглед</p>
+        <p>След запазване вижте резултата в <strong>Регулаторен скрининг</strong> — rule engine оценява всяко изискване отделно.</p>
+      </div>
+
+      <div className="flex justify-center">
+        <Link href="/settings/compliance" target="_blank">
+          <Button variant="outline" className="gap-2 text-sm">
+            <ShieldCheck className="h-4 w-4" />
+            Отвори скрининг (нов таб)
+          </Button>
+        </Link>
       </div>
     </div>
   );
@@ -642,10 +782,10 @@ function StepDone({ company, isGuideMode }: StepProps) {
   const quickLinks = [
     { href: '/data-entry',    icon: '📊', label: 'Въведи данни S1&2', color: 'border-green-200 bg-green-50' },
     { href: '/invoice-import',icon: '📄', label: 'Фактури → S3',      color: 'border-blue-200 bg-blue-50' },
+    { href: '/settings/compliance', icon: '🛡️', label: 'Скрининг',   color: 'border-emerald-200 bg-emerald-50' },
     { href: '/targets',       icon: '🎯', label: 'Постави цел',        color: 'border-purple-200 bg-purple-50' },
     { href: '/strategies',    icon: '💡', label: 'Стратегии',          color: 'border-amber-200 bg-amber-50' },
     { href: '/reports',       icon: '📋', label: 'Генерирай отчет',    color: 'border-indigo-200 bg-indigo-50' },
-    { href: '/data-quality',  icon: '🛡️', label: 'Качество данни',    color: 'border-teal-200 bg-teal-50' },
   ];
 
   return (
@@ -684,9 +824,9 @@ function StepDone({ company, isGuideMode }: StepProps) {
           {[
             { n: '1', text: 'Въведете данни за последните 3 месеца (Обхват 1&2) — ~10 мин' },
             { n: '2', text: 'Импортирайте CSV или фактури за Обхват 3 транзакции' },
-            { n: '3', text: 'Изберете 1–2 цели от шаблоните (SBTi или Net Zero)' },
-            { n: '4', text: 'Изберете 2–3 стратегии от каталога и активирайте' },
-            { n: '5', text: 'Генерирайте CSRD отчет — готов за клиенти и банки' },
+            { n: '3', text: 'Проверете Регулаторен скрининг след попълване на профила' },
+            { n: '4', text: 'Изберете 1–2 цели и 2–3 стратегии от каталога' },
+            { n: '5', text: 'Генерирайте CSRD или регулаторен отчет — готов за клиенти и банки' },
           ].map(step => (
             <li key={step.n} className="flex gap-2 text-xs text-gray-600">
               <span className="w-5 h-5 rounded-full bg-earth-100 text-earth-600 flex items-center justify-center font-bold text-xs shrink-0">
@@ -703,7 +843,7 @@ function StepDone({ company, isGuideMode }: StepProps) {
           <TrendingDown className="inline h-4 w-4 mr-1" />
           Вашата цел
         </p>
-        <p>Пълен въглероден профил + CSRD отчет + Активни стратегии = готови за всякакви ESG изисквания от клиенти, банки и регулатори.</p>
+        <p>Пълен въглероден профил + регулаторен скрининг + CSRD отчет + активни стратегии = готови за ESG изисквания от клиенти, банки и регулатори.</p>
       </div>
     </div>
   );
@@ -713,6 +853,7 @@ function StepDone({ company, isGuideMode }: StepProps) {
 const STEP_COMPONENTS: Record<string, React.ComponentType<StepProps>> = {
   welcome:    StepWelcome,
   company:    StepCompany,
+  compliance: StepCompliance,
   scope12:    StepScope12,
   scope3:     StepScope3,
   targets:    StepTargets,
@@ -723,7 +864,7 @@ const STEP_COMPONENTS: Record<string, React.ComponentType<StepProps>> = {
 // ─────────────────────────────────────────────────────────────────────────────
 // Main wizard component
 // ─────────────────────────────────────────────────────────────────────────────
-export default function OnboardingPage() {
+function OnboardingPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isGuideMode = searchParams.get('guide') === 'true';
@@ -736,24 +877,39 @@ export default function OnboardingPage() {
     industry_sector: '',
     employee_count: null,
     baseline_year: null,
+    annual_turnover_eur: null,
+    ets_has_installation: null,
+    ets_thermal_input_mw: null,
+    ets_activity_annex_i: null,
   });
 
   useEffect(() => {
     fetch('/api/companies/profile')
       .then(r => r.ok ? r.json() : null)
       .then(data => {
-        if (data?.user) setFirstName(data.user.first_name ?? '');
+        if (data?.user) {
+          setFirstName(data.user.first_name ?? '');
+          if (data.user.onboarding_completed && !isGuideMode) {
+            router.replace('/dashboard');
+            router.refresh();
+            return;
+          }
+        }
         if (data?.company) {
           setCompany({
             company_name: data.company.company_name ?? '',
             industry_sector: data.company.industry_sector ?? '',
             employee_count: data.company.employee_count ?? null,
             baseline_year: data.company.baseline_year ?? null,
+            annual_turnover_eur: data.company.annual_turnover_eur ?? null,
+            ets_has_installation: data.company.ets_has_installation ?? null,
+            ets_thermal_input_mw: data.company.ets_thermal_input_mw ?? null,
+            ets_activity_annex_i: data.company.ets_activity_annex_i ?? null,
           });
         }
       })
       .catch(() => {});
-  }, []);
+  }, [isGuideMode, router]);
 
   const total = ONBOARDING_STEPS.length;
   const step  = ONBOARDING_STEPS[currentStep];
@@ -771,17 +927,33 @@ export default function OnboardingPage() {
   const handleComplete = async () => {
     setCompleting(true);
     try {
-      await fetch('/api/onboarding/complete', {
+      const res = await fetch('/api/onboarding/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           industry_sector: company.industry_sector || undefined,
           employee_count:  company.employee_count  || undefined,
           baseline_year:   company.baseline_year   || undefined,
+          annual_turnover_eur: company.annual_turnover_eur ?? undefined,
+          ets_has_installation: company.ets_has_installation ?? undefined,
+          ets_thermal_input_mw: company.ets_thermal_input_mw ?? undefined,
+          ets_activity_annex_i: company.ets_activity_annex_i ?? undefined,
         }),
       });
-    } catch { /* silently ok — wizard isn't critical path */ }
-    router.push('/dashboard');
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? 'Failed to complete onboarding');
+      }
+
+      router.push('/dashboard');
+      router.refresh();
+    } catch (err) {
+      console.error('Onboarding complete error:', err);
+      toast.error('Възникна грешка при завършване. Моля, опитайте отново.');
+    } finally {
+      setCompleting(false);
+    }
   };
 
   const handleSkip = () => {
@@ -887,5 +1059,17 @@ export default function OnboardingPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function OnboardingPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center text-gray-400">
+        Зареждане...
+      </div>
+    }>
+      <OnboardingPageContent />
+    </Suspense>
   );
 }

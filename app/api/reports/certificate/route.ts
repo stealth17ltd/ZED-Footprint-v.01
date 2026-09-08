@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     const scope3Kg = (scope3Data || []).reduce((s, e) => s + (e.co2e_kg || 0), 0);
 
     // Generate a deterministic certificate number
-    const certNumber = `ZED-${reportingYear}-${userData.company_id.slice(0, 6).toUpperCase()}`;
+    const certNumber = `SUS-${reportingYear}-${userData.company_id.slice(0, 6).toUpperCase()}`;
 
     const pdfBuffer = await generateSustainabilityCertificate({
       company: {
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
     });
 
     const safeName = company.company_name.replace(/[\u0400-\u04FF]/g, '').replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'Company';
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',

@@ -1,5 +1,7 @@
 'use client';
 
+import { DEFAULT_CURRENCY, SUPPORTED_CURRENCIES } from '@/lib/constants/currency';
+
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -86,7 +88,7 @@ export default function DataEntryPage() {
     measurement_method: 'measured', // measured, calculated, estimated
     data_quality: 'high', // high, medium, low
     cost: '',
-    currency: 'BGN',
+    currency: DEFAULT_CURRENCY,
     responsible_person: '',
   });
 
@@ -161,7 +163,7 @@ export default function DataEntryPage() {
         measurement_method: 'measured',
         data_quality: 'high',
         cost: '',
-        currency: 'BGN',
+        currency: DEFAULT_CURRENCY,
         responsible_person: '',
       });
     } catch (error: any) {
@@ -511,9 +513,9 @@ export default function DataEntryPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="BGN">BGN</SelectItem>
-                          <SelectItem value="EUR">EUR</SelectItem>
-                          <SelectItem value="USD">USD</SelectItem>
+                          {SUPPORTED_CURRENCIES.map((c) => (
+                            <SelectItem key={c} value={c}>{c}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>

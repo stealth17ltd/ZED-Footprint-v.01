@@ -1,5 +1,6 @@
 import { PDFDocument, rgb } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
+import { PDF_PLATFORM_NAME } from './pdf-text';
 
 interface CSRDReportData {
   company: any;
@@ -140,7 +141,7 @@ export async function generateCSRDReport(data: CSRDReportData): Promise<Uint8Arr
   drawText(`Генериран на: ${genDate}`, margin, y, 9, COLORS.mediumGray);
   
   // Footer
-  drawText('Система: ZED Въглероден отпечатък', margin, 40, 9, COLORS.mediumGray);
+  drawText(`Система: ${PDF_PLATFORM_NAME}`, margin, 40, 9, COLORS.mediumGray);
   drawLine(margin, 30, width - margin, 30, 0.5, COLORS.mediumGray);
 
   // === PAGE 2: TABLE OF CONTENTS ===
@@ -185,9 +186,9 @@ export async function generateCSRDReport(data: CSRDReportData): Promise<Uint8Arr
 
   // Key metrics boxes
   const metrics = [
-    { label: 'Общо емисии', value: `${data.totalEmissions.total.toFixed(2)} tCO₂e`, color: COLORS.primary },
-    { label: 'Обхват 1', value: `${data.totalEmissions.scope1.toFixed(2)} tCO₂e`, color: COLORS.secondary },
-    { label: 'Обхват 2', value: `${data.totalEmissions.scope2.toFixed(2)} tCO₂e`, color: rgb(0.2, 0.4, 0.7) },
+    { label: 'Общо емисии', value: `${data.totalEmissions.total.toFixed(2)} tCO2e`, color: COLORS.primary },
+    { label: 'Обхват 1', value: `${data.totalEmissions.scope1.toFixed(2)} tCO2e`, color: COLORS.secondary },
+    { label: 'Обхват 2', value: `${data.totalEmissions.scope2.toFixed(2)} tCO2e`, color: rgb(0.2, 0.4, 0.7) },
   ];
 
   const boxWidth = (contentWidth - 40) / 3;
@@ -201,7 +202,7 @@ export async function generateCSRDReport(data: CSRDReportData): Promise<Uint8Arr
   y -= 90;
 
   // Summary text
-  const summaryText = `Този отчет представя въглеродния отпечатък на ${data.company.company_name} за отчетния период ${data.reportingYear} година. Общите емисии на парникови газове възлизат на ${data.totalEmissions.total.toFixed(2)} tCO₂e, като ${((data.totalEmissions.scope1 / data.totalEmissions.total) * 100).toFixed(1)}% са от директни източници (Обхват 1) и ${((data.totalEmissions.scope2 / data.totalEmissions.total) * 100).toFixed(1)}% от индиректни източници - енергия (Обхват 2).`;
+  const summaryText = `Този отчет представя въглеродния отпечатък на ${data.company.company_name} за отчетния период ${data.reportingYear} година. Общите емисии на парникови газове възлизат на ${data.totalEmissions.total.toFixed(2)} tCO2e, като ${((data.totalEmissions.scope1 / data.totalEmissions.total) * 100).toFixed(1)}% са от директни източници (Обхват 1) и ${((data.totalEmissions.scope2 / data.totalEmissions.total) * 100).toFixed(1)}% от индиректни източници - енергия (Обхват 2).`;
   
   const summaryLines = wrapText(summaryText, contentWidth, 11);
   summaryLines.forEach(line => {
@@ -295,7 +296,7 @@ export async function generateCSRDReport(data: CSRDReportData): Promise<Uint8Arr
   
   drawText('Обхват', margin + 10, y - 18, 11, COLORS.text);
   drawText('Описание', margin + colWidths[0] + 10, y - 18, 11, COLORS.text);
-  drawText('tCO₂e', margin + colWidths[0] + colWidths[1] + 30, y - 18, 11, COLORS.text);
+  drawText('tCO2e', margin + colWidths[0] + colWidths[1] + 30, y - 18, 11, COLORS.text);
   y -= rowHeight;
 
   // Vertical lines
@@ -373,7 +374,7 @@ export async function generateCSRDReport(data: CSRDReportData): Promise<Uint8Arr
     
     drawText(`${label}:`, margin, y, 9);
     drawRect(margin + 220, y - 12, barWidth, 12, COLORS.secondary);
-    drawText(`${value.toFixed(2)} tCO₂e (${percent}%)`, margin + 220 + barWidth + 10, y, 9);
+    drawText(`${value.toFixed(2)} tCO2e (${percent}%)`, margin + 220 + barWidth + 10, y, 9);
     y -= 22;
   });
 

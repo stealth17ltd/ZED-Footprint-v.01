@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { fetchScope12Rows, getCompanyFootprint } from '@/lib/carbon/footprint-service';
+import { getEvidenceCoverage, type EvidenceCoverage } from '@/lib/evidence/coverage';
 
 export interface ScopeMonthStatus {
   month: number;   // 1-12
@@ -37,6 +39,15 @@ export interface DataQualityResult {
   scope3CalcCoverage: number;                      // % classified that are also calculated
   // Targets
   hasActiveTargets: boolean;
+  // Canonical footprint (FootprintService)
+  footprint: {
+    scope1: number;
+    scope2: number;
+    scope3: number;
+    total: number;
+  };
+  // Evidence / audit trail
+  evidenceCoverage: EvidenceCoverage;
   // Overall
   overallScore: number;         // 0-100 composite
   missingMonths: number[];      // months (1-12) missing BOTH scope 1 and 2
@@ -75,18 +86,13 @@ export async function GET(request: Request) {
     const now  = new Date();
     const currentMonth = now.getFullYear() === year ? now.getMonth() + 1 : 12;
 
-    // ── Scope 1 & 2 ──────────────────────────────────────────────────────────
-    const { data: ed } = await supabase
-      .from('emission_data')
-      .select('scope, reporting_period')
-      .eq('company_id', userData.company_id)
-      .gte('reporting_period', `${year}-01-01`)
-      .lte('reporting_period', `${year}-12-31`);
+    // ── Scope 1 & 2 (canonical fetch) ───────────────────────────────────────
+    const scope12Rows = await fetchScope12Rows(supabase, userData.company_id, year);
 
     const monthlyStatus: ScopeMonthStatus[] = Array.from({ length: 12 }, (_, i) => {
       const m   = i + 1;
       const pad = String(m).padStart(2, '0');
-      const monthEntries = (ed ?? []).filter(r => r.reporting_period?.slice(5, 7) === pad);
+      const monthEntries = scope12Rows.filter(r => r.reporting_period?.slice(5, 7) === pad);
       return {
         month:    m,
         label:    BG_MONTHS[i],
@@ -101,12 +107,17 @@ export async function GET(request: Request) {
     const scope2Months       = monthlyStatus.slice(0, activableMonths).filter(m => m.hasScope2).length;
     const scope1Completeness = activableMonths > 0 ? Math.round((scope1Months / activableMonths) * 100) : 0;
     const scope2Completeness = activableMonths > 0 ? Math.round((scope2Months / activableMonths) * 100) : 0;
-    const scope1Entries      = (ed ?? []).filter(r => r.scope === 1).length;
-    const scope2Entries      = (ed ?? []).filter(r => r.scope === 2).length;
+    const scope1Entries      = scope12Rows.filter(r => r.scope === 1).length;
+    const scope2Entries      = scope12Rows.filter(r => r.scope === 2).length;
     const missingMonths      = monthlyStatus
       .slice(0, activableMonths)
       .filter(m => !m.hasScope1 && !m.hasScope2)
       .map(m => m.month);
+
+    const [footprint, evidenceCoverage] = await Promise.all([
+      getCompanyFootprint(supabase, userData.company_id, year),
+      getEvidenceCoverage(supabase, userData.company_id, year),
+    ]);
 
     // ── Scope 3 transactions ──────────────────────────────────────────────────
     const { data: txRows } = await supabase
@@ -157,7 +168,7 @@ export async function GET(request: Request) {
     });
 
     const scope3CalcCoverage = s3TxClassified > 0
-      ? Math.round(((calcRows ?? []).length / s3TxClassified) * 100)
+      ? Math.min(100, Math.round(((calcRows ?? []).length / s3TxClassified) * 100))
       : 0;
 
     // ── Active targets ────────────────────────────────────────────────────────
@@ -171,6 +182,9 @@ export async function GET(request: Request) {
     // ── Overall score ─────────────────────────────────────────────────────────
     const components = [scope1Completeness, scope2Completeness];
     if (scope3Available) components.push(s3ClassRate);
+    if (evidenceCoverage.scope12Entries > 0) {
+      components.push(evidenceCoverage.coveragePercent);
+    }
     const overallScore = Math.round(components.reduce((a, b) => a + b, 0) / components.length);
 
     // ── Simple recommendations (backward compat) ──────────────────────────────
@@ -274,6 +288,24 @@ export async function GET(request: Request) {
       });
     }
 
+    if (evidenceCoverage.scope12Entries > 0 && evidenceCoverage.coveragePercent < 50) {
+      tips.push({
+        type: 'warning',
+        title: `Само ${evidenceCoverage.coveragePercent}% от записите имат документ`,
+        description: `${evidenceCoverage.scope12WithEvidence} от ${evidenceCoverage.scope12Entries} емисионни записа имат прикачен източник (фактура, показание). CSRD и одит изискват проследимост до първични документи.`,
+        action: 'Прикачи документи',
+        link: '/data-entry/list',
+      });
+    }
+
+    if (evidenceCoverage.coveragePercent >= 80 && evidenceCoverage.scope12Entries >= 6) {
+      tips.push({
+        type: 'success',
+        title: 'Добро покритие с доказателства',
+        description: `${evidenceCoverage.coveragePercent}% от Обхват 1+2 записите имат прикачен документ — подобрява одитната следа в CSRD отчетите.`,
+      });
+    }
+
     // ── Info / best practices ──
     tips.push({
       type: 'info',
@@ -343,6 +375,13 @@ export async function GET(request: Request) {
       scope3CategoryCoverage,
       scope3CalcCoverage,
       hasActiveTargets,
+      footprint: {
+        scope1: footprint.scope1,
+        scope2: footprint.scope2,
+        scope3: footprint.scope3,
+        total: footprint.total,
+      },
+      evidenceCoverage,
       overallScore,
       missingMonths,
       recommendations: recs,

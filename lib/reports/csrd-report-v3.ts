@@ -8,6 +8,7 @@
 
 import { PDFDocument, rgb, PDFPage, PDFFont } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
+import { PDF_PLATFORM_NAME, pdfSafeText } from './pdf-text';
 
 // ─────────────────────────────────────────────
 // Types
@@ -139,7 +140,7 @@ function drawText(
   page: PDFPage, text: string, x: number, y: number, size: number,
   font: PDFFont, color = C.black, maxWidth?: number
 ) {
-  const t = (text ?? '').toString();
+  const t = pdfSafeText((text ?? '').toString());
   if (!t) return;
   if (maxWidth) {
     let s = t;
@@ -509,7 +510,7 @@ export async function generateCSRDReportV3(data: CSRDReportData): Promise<Buffer
     drawText(firstPage, `${sign}${data.comparisonData.changePercent.toFixed(1)}% спрямо ${data.reportingYear - 1} г.  (${data.comparisonData.previousYear.toFixed(3)} tCO2e)`, M + 12, banTop - 60, 8.5, font, col);
   }
 
-  drawText(firstPage, `Изготвил: ${data.generatedBy || 'ZED Platform'}`, M + 12, banTop - 73, 8, font, C.gray);
+  drawText(firstPage, `Изготвил: ${data.generatedBy || PDF_PLATFORM_NAME}`, M + 12, banTop - 73, 8, font, C.gray);
 
   // Scope summary cards
   const cardAreaTop = banTop - banH - 14;
@@ -853,7 +854,7 @@ export async function generateCSRDReportV3(data: CSRDReportData): Promise<Buffer
   drawRect(ctx.page, ctx.M, ctx.y, ctx.W - ctx.M * 2, 38, C.navyLight, C.navy);
   drawText(ctx.page, 'Декларация за съответствие с ESRS E1', ctx.M + 10, ctx.y - 12, 8.5, font, C.navy, ctx.W - ctx.M * 2 - 14);
   drawText(ctx.page, `Настоящото разкриване е изготвено в съответствие с изискванията на ESRS E1 (Регламент (ЕС) 2023/2772) и GHG Protocol.`, ctx.M + 10, ctx.y - 25, 8, font, C.darkGray, ctx.W - ctx.M * 2 - 14);
-  drawText(ctx.page, `Отчетна година: ${data.reportingYear} г.  |  Изготвил: ${data.generatedBy || 'ZED Platform'}  |  Дата: ${today}`, ctx.M + 10, ctx.y - 36, 7.5, font, C.gray, ctx.W - ctx.M * 2 - 14);
+  drawText(ctx.page, `Отчетна година: ${data.reportingYear} г.  |  Изготвил: ${data.generatedBy || PDF_PLATFORM_NAME}  |  Дата: ${today}`, ctx.M + 10, ctx.y - 36, 7.5, font, C.gray, ctx.W - ctx.M * 2 - 14);
 
   // ── Retroactively add footer to page 1 (now we know total pages) ──
   const totalPages = pdfDoc.getPageCount();

@@ -178,7 +178,7 @@ export default function StrategiesProgressWidget() {
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
             <Lightbulb className="h-4 w-4 text-earth-400" />
-            Стратегии за намаляване
+            Стратегии и планиране
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -240,7 +240,7 @@ export default function StrategiesProgressWidget() {
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
             <Lightbulb className="h-4 w-4 text-amber-500" />
-            Стратегии за намаляване
+            Стратегии и планиране
           </CardTitle>
           <div className="flex items-center gap-1.5">
             {completed.length > 0 && (

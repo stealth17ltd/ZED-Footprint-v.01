@@ -1,5 +1,7 @@
 'use client';
 
+import { SUPPORTED_CURRENCIES } from '@/lib/constants/currency';
+
 import React, { useState, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,7 +44,7 @@ interface EditableRow {
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CURRENCIES = ['BGN', 'EUR', 'USD', 'GBP', 'CHF'];
+const CURRENCIES = [...SUPPORTED_CURRENCIES];
 
 function confidenceColor(c: 'high' | 'medium' | 'low') {
   return c === 'high'   ? 'text-green-600' :
@@ -52,6 +54,27 @@ function confidenceColor(c: 'high' | 'medium' | 'low') {
 function ConfidenceDot({ c }: { c: 'high' | 'medium' | 'low' }) {
   const col = c === 'high' ? 'bg-green-400' : c === 'medium' ? 'bg-amber-400' : 'bg-red-400';
   return <span className={`inline-block w-2 h-2 rounded-full ${col} shrink-0`} title={`Достоверност: ${c}`} />;
+}
+
+function effectiveConfidence(row: {
+  txn_date: string;
+  supplier: string;
+  amount_original: number | string;
+  invoice_number?: string;
+  description?: string;
+  overallConfidence: 'high' | 'medium' | 'low';
+}): 'high' | 'medium' | 'low' {
+  const amount = typeof row.amount_original === 'number'
+    ? row.amount_original
+    : parseFloat(row.amount_original);
+
+  if (!row.txn_date || !row.supplier || !Number.isFinite(amount) || amount <= 0) {
+    return 'low';
+  }
+  if (!row.invoice_number || !row.description) {
+    return 'medium';
+  }
+  return row.overallConfidence;
 }
 
 function parsedToRow(p: ParsedInvoice, idx: number): EditableRow {
@@ -201,8 +224,8 @@ function EditableTable({
               key={row.id}
               className={`transition-colors ${
                 !row.selected ? 'opacity-40' :
-                row.overallConfidence === 'low' ? 'bg-red-50/30' :
-                row.overallConfidence === 'medium' ? 'bg-amber-50/30' : ''
+                row.overallConfidence === 'low' || effectiveConfidence(row) === 'low' ? 'bg-red-50/30' :
+                effectiveConfidence(row) === 'medium' ? 'bg-amber-50/30' : ''
               }`}
             >
               <td className="px-3 py-2">
@@ -215,7 +238,7 @@ function EditableTable({
               </td>
               <td className="px-3 py-2">
                 <div className="flex items-center gap-1.5">
-                  <ConfidenceDot c={row.overallConfidence} />
+                  <ConfidenceDot c={effectiveConfidence(row)} />
                   <div>
                     <p className="text-xs text-gray-600 max-w-28 truncate" title={row.filename}>
                       {row.filename}
@@ -288,7 +311,7 @@ function EditableTable({
                   value={row.invoice_number}
                   onChange={e => update(row.id, 'invoice_number', e.target.value)}
                   placeholder="№"
-                  className="h-8 text-xs w-28"
+                  className={`h-8 text-xs w-28 ${!row.invoice_number ? 'border-amber-300' : ''}`}
                 />
               </td>
               <td className="px-3 py-2">
@@ -417,8 +440,8 @@ export default function InvoiceImportPage() {
   };
 
   const clearAll = () => { setFileStates([]); setRows([]); setImportResult(null); };
-  const highConf  = rows.filter(r => r.overallConfidence === 'high').length;
-  const needsReview = rows.filter(r => r.overallConfidence !== 'high').length;
+  const highConf  = rows.filter(r => effectiveConfidence(r) === 'high').length;
+  const needsReview = rows.filter(r => effectiveConfidence(r) !== 'high').length;
 
   return (
     <div className="p-8">

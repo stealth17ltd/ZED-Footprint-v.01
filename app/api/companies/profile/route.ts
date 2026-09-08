@@ -13,7 +13,7 @@ export async function GET() {
 
     const { data: userData } = await supabase
       .from('users')
-      .select('first_name, last_name, role, company_id')
+      .select('first_name, last_name, role, company_id, onboarding_completed')
       .eq('id', user.id)
       .single();
 
@@ -23,7 +23,7 @@ export async function GET() {
 
     const { data: company } = await supabase
       .from('companies')
-      .select('company_name, industry_sector, employee_count, baseline_year')
+      .select('company_name, industry_sector, employee_count, baseline_year, annual_turnover_eur, ets_has_installation, ets_thermal_input_mw, ets_activity_annex_i')
       .eq('id', userData.company_id)
       .single();
 

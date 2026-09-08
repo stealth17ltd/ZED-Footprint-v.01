@@ -58,6 +58,7 @@ import {
   SCOPE_FILTER_OPTIONS,
   type TargetTemplate,
 } from '@/lib/target-templates';
+import { PageSkeleton } from '@/components/ui/page-skeleton';
 import {
   LineChart,
   Line,
@@ -820,9 +821,45 @@ export default function TargetsPage() {
   }, [forecasts, loadingForecast]);
 
   useEffect(() => {
-    targets
-      .filter(t => t.status === 'active')
-      .forEach(t => loadForecast(t.id));
+    const active = targets.filter((t) => t.status === 'active');
+    if (active.length === 0) return;
+
+    const idsToLoad = active
+      .map((t) => t.id)
+      .filter((id) => !forecasts[id] && !loadingForecast[id]);
+    if (idsToLoad.length === 0) return;
+
+    setLoadingForecast((prev) => {
+      const next = { ...prev };
+      idsToLoad.forEach((id) => { next[id] = true; });
+      return next;
+    });
+
+    void Promise.all(
+      idsToLoad.map(async (targetId) => {
+        try {
+          const res = await fetch(`/api/targets/forecast?targetId=${targetId}`);
+          if (!res.ok) return null;
+          const result = await res.json();
+          return { targetId, data: result.data as ForecastResult };
+        } catch {
+          return null;
+        }
+      }),
+    ).then((results) => {
+      const updates: Record<string, ForecastResult> = {};
+      results.forEach((r) => {
+        if (r) updates[r.targetId] = r.data;
+      });
+      if (Object.keys(updates).length > 0) {
+        setForecasts((prev) => ({ ...prev, ...updates }));
+      }
+      setLoadingForecast((prev) => {
+        const next = { ...prev };
+        idsToLoad.forEach((id) => { next[id] = false; });
+        return next;
+      });
+    });
   }, [targets]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchBaselineValue = async (year: string, scope: string) => {
@@ -1039,11 +1076,7 @@ export default function TargetsPage() {
     : 0;
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="h-8 w-8 animate-spin text-earth-300" />
-      </div>
-    );
+    return <PageSkeleton statCards={4} table={false} />;
   }
 
   return (
@@ -1390,7 +1423,11 @@ export default function TargetsPage() {
                         <p className="text-lg font-bold text-earth-400">
                           {target.target_type === 'percentage' ? `-${target.target_value}%` : targetAbs.toFixed(2)}
                         </p>
-                        <p className="text-xs text-gray-400">{target.target_type === 'percentage' ? '' : 'tCO2e'}</p>
+                        <p className="text-xs text-gray-400">
+                          {target.target_type === 'percentage'
+                            ? `${targetAbs.toFixed(2)} tCO2e`
+                            : 'tCO2e'}
+                        </p>
                       </div>
                       <div className={`text-center p-3 rounded-lg ${isOnTrack ? 'bg-green-50' : 'bg-amber-50'}`}>
                         <p className="text-xs text-gray-500">Прогрес</p>

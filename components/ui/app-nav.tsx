@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import {
   Building2, LayoutDashboard, LogOut, FileText, HelpCircle,
-  PlusCircle, Shield, Target, Database, ChevronDown, ListChecks,
+  PlusCircle, Target, Database, ChevronDown, ListChecks,
   Receipt, Tag, Upload, Zap, Leaf, Users, GitCompareArrows, ShieldCheck,
   BookOpen, Trophy, TrendingUp, Lightbulb, Lock, FlaskConical, MapPin,
 } from 'lucide-react';
@@ -63,14 +63,14 @@ function menuItemCls(active: boolean) {
 export function AppNavLinks({ isAdmin }: { isAdmin: boolean }) {
   const { pathname, isActive, linkCls, triggerCls } = useNavHelpers();
   const isDataActive     = isActive('/data-entry') || isActive('/scope3');
-  const isAnalysisActive = isActive('/comparison') || isActive('/benchmark');
+  const isAnalysisActive = isActive('/comparison') || isActive('/benchmark') || isActive('/vsme');
 
   return (
     <nav className="hidden md:flex items-center space-x-0.5">
       {isAdmin ? (
         <>
           <Link href="/admin" className={linkCls('/admin', true)}>
-            <LayoutDashboard className="h-4 w-4" /> Табло
+            <LayoutDashboard className="h-4 w-4" /> Управление
           </Link>
           <Link href="/admin/companies" className={linkCls('/admin/companies')}>
             <Building2 className="h-4 w-4" /> Компании
@@ -100,7 +100,7 @@ export function AppNavLinks({ isAdmin }: { isAdmin: boolean }) {
       ) : (
         <>
           <Link href="/dashboard" className={linkCls('/dashboard', true)}>
-            <LayoutDashboard className="h-4 w-4" /> Табло
+            <LayoutDashboard className="h-4 w-4" /> Управление
           </Link>
 
           {/* Данни dropdown */}
@@ -191,10 +191,20 @@ export function AppNavLinks({ isAdmin }: { isAdmin: boolean }) {
               <TrendingUp className="h-4 w-4" /> Анализ <ChevronDown className="h-3 w-3" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-60">
-              <SectionHeader label="ПЕРИОДИЧЕН АНАЛИЗ" color="bg-blue-50 text-blue-700" />
+              <SectionHeader label="АНАЛИЗ И ОТЧЕТНОСТ" color="bg-blue-50 text-blue-700" />
               <DropdownMenuItem asChild>
                 <Link href="/comparison" className={menuItemCls(pathname === '/comparison')}>
                   <GitCompareArrows className="h-4 w-4 text-blue-500" /> Сравнение по периоди
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/settings/compliance" className={menuItemCls(pathname === '/settings/compliance')}>
+                  <ShieldCheck className="h-4 w-4 text-emerald-600" /> Регулаторен скрининг
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/vsme" className={menuItemCls(pathname === '/vsme')}>
+                  <BookOpen className="h-4 w-4 text-indigo-600" /> VSME готовност
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
@@ -263,6 +273,11 @@ export function AppNavUser({ isAdmin, firstName, role }: NavProps) {
             <DropdownMenuItem asChild>
               <Link href="/settings/privacy" className="cursor-pointer flex items-center gap-2">
                 <Lock className="h-4 w-4 text-blue-500" /> Поверителност & GDPR
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/settings/compliance" className="cursor-pointer flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-emerald-600" /> Регулаторен скрининг
               </Link>
             </DropdownMenuItem>
           </>

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { DEFAULT_CURRENCY } from '@/lib/constants/currency';
 
 // pdfjs-dist (bundled inside pdf-parse v2) calls `new DOMMatrix()` at module
 // evaluation time, which fails in Node.js because DOMMatrix is browser-only.
@@ -137,7 +138,7 @@ function heuristicParse(text: string, filename: string): ParsedInvoice {
 
   // ── Currency ───────────────────────────────────────────────────────────────
   // Detect BEFORE amount parsing so we can pick the right amount on dual-currency lines.
-  let currency_original: ParsedInvoiceField<string> = { value: 'BGN', confidence: 'medium' };
+  let currency_original: ParsedInvoiceField<string> = { value: DEFAULT_CURRENCY, confidence: 'medium' };
   // "Сума за плащане: BGN 156.00 79.76 EUR" — EUR listed last means EUR invoice
   const dualCurrencyEUR = /[Сс]ума\s+за\s+плащане[:\s]+BGN\s+[0-9,\.]+\s+[0-9,\.]+\s+EUR/.test(full);
   const dualCurrencyUSD = /[Сс]ума\s+за\s+плащане[:\s]+BGN\s+[0-9,\.]+\s+[0-9,\.]+\s+USD/.test(full);
@@ -220,16 +221,18 @@ function heuristicParse(text: string, filename: string): ParsedInvoice {
   // ── Invoice number ────────────────────────────────────────────────────────
   let invoice_number: ParsedInvoiceField<string> = { value: '', confidence: 'low' };
   const invPatterns = [
-    /[Фф]актура\s*[№Nn#No\.]*\s*:?\s*([0-9А-Яа-яA-Za-z\-\/]+)/,
-    /Invoice\s*[#No\.]*\s*:?\s*([0-9A-Za-z\-\/]+)/i,
-    /[Нн]омер[:\s]+([0-9А-Яа-яA-Za-z\-\/]+)/,
-    // "No:0000002964" format from НАП
-    /^No[:\s]*([0-9]{5,15})$/m,
-    /[Нн][оо]\.?\s*([0-9]{5,12})/,
+    /№\s*:?\s*([0-9]{4,15})/,
+    /[Nn][oо]\.?\s*:?\s*([0-9]{4,15})/,
+    /[Фф]актура[^0-9\n]{0,40}№\s*:?\s*([0-9]{4,15})/,
+    /Invoice\s*[#No\.]*\s*:?\s*([0-9A-Za-z\-\/]{4,20})/i,
+    /[Нн]омер[:\s]+([0-9]{4,15})/,
   ];
   for (const p of invPatterns) {
     const m = full.match(p);
-    if (m) { invoice_number = { value: m[1].trim(), confidence: 'high' }; break; }
+    if (m && m[1].trim()) {
+      invoice_number = { value: m[1].trim(), confidence: 'high' };
+      break;
+    }
   }
 
   // ── Helper: extract amount from a line that may have "BGN X EUR_amount EUR" ──
@@ -242,7 +245,7 @@ function heuristicParse(text: string, filename: string): ParsedInvoice {
       if (dual) { const n = parseAmount(dual[1]); if (n && n > 0) return n; }
     }
     // Single-currency or BGN invoice: skip optional leading currency code
-    const single = line.match(/(?:[A-Z]{3}\s+)?([0-9]+[,\.][0-9]+)/);
+    const single = line.match(/(?:[A-Z]{3}\s+)?([0-9]{1,3}(?:[.\s][0-9]{3})*[,\.][0-9]{2,3}|[0-9]+[,\.][0-9]{2,3})/);
     if (single) { const n = parseAmount(single[1]); if (n && n > 0) return n; }
     return null;
   }
@@ -252,9 +255,9 @@ function heuristicParse(text: string, filename: string): ParsedInvoice {
 
   // High-confidence label patterns — search line by line to feed into extractAmountFromLine
   const totalLabels = [
-    /[Сс]ума\s+за\s+плащане\s*:/,
+    /[Сс]ума\s+за\s+плащане/i,
     /[Оо]бщо\s+с\s+[Дд]{3}/,
-    /[Зз]а\s+плащане\s*:/,
+    /[Зз]а\s+плащане/i,
     /Total\s+(?:incl\.?\s+VAT)?/i,
     /TOTAL/i,
     /[Иитт]того\s*:/,
@@ -262,15 +265,26 @@ function heuristicParse(text: string, filename: string): ParsedInvoice {
     /[Сс]ума\s*:/,
   ];
   for (const label of totalLabels) {
-    const matchLine = lines.find(l => label.test(l));
-    if (matchLine) {
-      const rest = matchLine.replace(label, '').replace(/^[\s:]+/, '');
-      const n = extractAmountFromLine(rest.length > 2 ? rest : matchLine);
-      if (n !== null && n > 0) {
-        const isHigh = /сума\s+за\s+плащане|общо\s+с\s+[дд]{3}|за\s+плащане|total.*vat/i.test(matchLine);
-        amount_original = { value: n, confidence: isHigh ? 'high' : 'medium' };
-        break;
-      }
+    const matchIdx = lines.findIndex(l => label.test(l));
+    if (matchIdx < 0) continue;
+    const matchLine = lines[matchIdx];
+    // Check same line and up to 2 following lines (amount often on next line)
+    const block = [matchLine, lines[matchIdx + 1], lines[matchIdx + 2]]
+      .filter(Boolean)
+      .join(' ');
+    const n =
+      extractAmountFromLine(matchLine.replace(label, '').replace(/^[\s:]+/, '')) ??
+      extractAmountFromLine(block) ??
+      (() => {
+        const nums = block.match(/([0-9]{1,3}(?:[.\s][0-9]{3})*[,\.][0-9]{2,3}|[0-9]+[,\.][0-9]{2,3})\s*(?:€|EUR|евро|лв|BGN)?/gi);
+        if (!nums?.length) return null;
+        const parsed = nums.map(s => parseAmount(s)).filter((v): v is number => v !== null && v > 0);
+        return parsed.length ? Math.max(...parsed) : null;
+      })();
+    if (n !== null && n > 0) {
+      const isHigh = /сума\s+за\s+плащане|общо\s+с\s+[дд]{3}|за\s+плащане|total.*vat/i.test(block);
+      amount_original = { value: n, confidence: isHigh ? 'high' : 'medium' };
+      break;
     }
   }
 
@@ -292,21 +306,24 @@ function heuristicParse(text: string, filename: string): ParsedInvoice {
     }
   }
 
-  // ── Description ───────────────────────────────────────────────────────────
+  // ── Description ── table-row extraction with multi-line support ──────────────
   let description: ParsedInvoiceField<string> = { value: '', confidence: 'low' };
 
-  // ── Description ── table-row extraction with multi-line support ──────────────
-  // Find the first data row: line starting with a row number then Cyrillic/Latin/quote text.
-  const firstRowIdx = lines.findIndex(l => /^\d+\s+[А-Яа-яA-Za-z"„«»]/.test(l));
+  // Prefer line-item description from table (after НАИМЕНОВАНИЕ header or row "1 …")
+  const nameHeaderIdx = lines.findIndex(l => /НАИМЕНОВАНИЕ|наименование/i.test(l));
+  const tableRowStart = nameHeaderIdx >= 0 ? nameHeaderIdx + 1 : -1;
+  const firstRowIdx = tableRowStart >= 0
+    ? lines.slice(tableRowStart).findIndex(l => /^\d+\s+[А-Яа-яA-Za-z"„«»]/.test(l)) + tableRowStart
+    : lines.findIndex(l => /^\d+\s+[А-Яа-яA-Za-z"„«»]/.test(l));
+
   if (firstRowIdx >= 0) {
     const firstRow = lines[firstRowIdx];
-    // Remove leading row number
-    let descText = firstRow.replace(/^\d+\s+/, '').trim();
-    // Strip trailing price columns that may appear on the same line
-    // e.g. "абонаментна поддръжка февруари бр. 1 66.47 20.00% 66.47"
-    descText = descText.replace(/\s+\d+[\s.,]\d+[\s.,\d%]*$/, '').trim();
-    // Strip dangling unit abbreviation at the end (e.g. trailing "бр." or "бр")
-    descText = descText.replace(/\s+(?:бр\.?|кг\.?|шт\.?)$/i, '').trim();
+    // Remove leading row number and optional code column
+    let descText = firstRow.replace(/^\d+\s+(?:[A-Z0-9\-]+\s+)?/, '').trim();
+    // Strip trailing price / unit columns
+    descText = descText.replace(/\s+[0-9]{1,3}(?:[.\s][0-9]{3})*[,\.][0-9]{2,3}[\s.,\d%€EURлв]*$/i, '').trim();
+    descText = descText.replace(/\s+\d+[\s.,]\d+[\s.,\d%€EURлв]*$/i, '').trim();
+    descText = descText.replace(/\s+(?:бр\.?|кг\.?|шт\.?|EUR|€|\d+\s*бр\.?)$/i, '').trim();
     // Strip trailing punctuation
     descText = descText.replace(/[,\s]+$/, '').trim();
 
@@ -353,15 +370,31 @@ function heuristicParse(text: string, filename: string): ParsedInvoice {
     if (candidate) description = { value: candidate.slice(0, 200), confidence: 'low' };
   }
 
-  // ── Overall confidence ────────────────────────────────────────────────────
-  const scores = [
-    txn_date.confidence, supplier.confidence,
-    amount_original.confidence, currency_original.confidence,
-  ];
-  const highCount = scores.filter(s => s === 'high').length;
-  const overallConfidence =
-    highCount >= 3 ? 'high' :
-    highCount >= 2 ? 'medium' : 'low';
+  // ── Overall confidence (value-aware — empty/zero fields cannot be "high") ──
+  if (!amount_original.value || amount_original.value <= 0) {
+    amount_original.confidence = 'low';
+  }
+  if (!txn_date.value) txn_date.confidence = 'low';
+  if (!supplier.value) supplier.confidence = 'low';
+  if (!invoice_number.value) invoice_number.confidence = 'low';
+  if (!description.value) description.confidence = 'low';
+
+  const criticalOk =
+    !!txn_date.value &&
+    !!supplier.value &&
+    amount_original.value > 0;
+
+  const secondaryOk =
+    !!invoice_number.value &&
+    !!description.value &&
+    amount_original.confidence !== 'low';
+
+  const overallConfidence: 'high' | 'medium' | 'low' =
+    criticalOk && secondaryOk && amount_original.confidence === 'high'
+      ? 'high'
+      : criticalOk
+        ? 'medium'
+        : 'low';
 
   return {
     filename,
@@ -409,20 +442,26 @@ ${text.slice(0, 4000)}`;
     if (!res.ok) return null;
     const data = await res.json();
     const raw  = JSON.parse(data.choices[0].message.content);
+    const amount = Number(raw.amount_original) || 0;
 
-    return {
+    const result: ParsedInvoice = {
       filename,
       rawText: text.slice(0, 3000),
-      txn_date:          { value: raw.txn_date        ?? '',    confidence: 'high' },
-      supplier:          { value: raw.supplier         ?? '',   confidence: 'high' },
-      description:       { value: raw.description      ?? '',   confidence: 'high' },
-      amount_original:   { value: Number(raw.amount_original) || 0, confidence: 'high' },
-      currency_original: { value: raw.currency_original ?? 'BGN', confidence: 'high' },
-      invoice_number:    { value: raw.invoice_number   ?? '',   confidence: 'high' },
-      vat_amount:        { value: Number(raw.vat_amount)     || 0, confidence: 'high' },
-      overallConfidence: 'high',
+      txn_date:          { value: raw.txn_date        ?? '',    confidence: raw.txn_date ? 'high' : 'low' },
+      supplier:          { value: raw.supplier         ?? '',   confidence: raw.supplier ? 'high' : 'low' },
+      description:       { value: raw.description      ?? '',   confidence: raw.description ? 'high' : 'low' },
+      amount_original:   { value: amount, confidence: amount > 0 ? 'high' : 'low' },
+      currency_original: { value: raw.currency_original ?? DEFAULT_CURRENCY, confidence: 'high' },
+      invoice_number:    { value: raw.invoice_number   ?? '',   confidence: raw.invoice_number ? 'high' : 'low' },
+      vat_amount:        { value: Number(raw.vat_amount)     || 0, confidence: 'medium' },
+      overallConfidence: 'low',
       method: 'ai',
     };
+    result.overallConfidence =
+      result.txn_date.value && result.supplier.value && result.amount_original.value > 0
+        ? (result.invoice_number.value && result.description.value ? 'high' : 'medium')
+        : 'low';
+    return result;
   } catch {
     return null;
   }
@@ -485,7 +524,7 @@ export async function POST(request: Request) {
               supplier:          { value: '', confidence: 'low' as const },
               description:       { value: '', confidence: 'low' as const },
               amount_original:   { value: 0,  confidence: 'low' as const },
-              currency_original: { value: 'BGN', confidence: 'low' as const },
+              currency_original: { value: DEFAULT_CURRENCY, confidence: 'low' as const },
               invoice_number:    { value: '', confidence: 'low' as const },
               vat_amount:        { value: 0,  confidence: 'low' as const },
               overallConfidence: 'low' as const,
@@ -506,7 +545,7 @@ export async function POST(request: Request) {
             supplier:          { value: '', confidence: 'low' as const },
             description:       { value: '', confidence: 'low' as const },
             amount_original:   { value: 0,  confidence: 'low' as const },
-            currency_original: { value: 'BGN', confidence: 'low' as const },
+            currency_original: { value: DEFAULT_CURRENCY, confidence: 'low' as const },
             invoice_number:    { value: '', confidence: 'low' as const },
             vat_amount:        { value: 0,  confidence: 'low' as const },
             overallConfidence: 'low' as const,

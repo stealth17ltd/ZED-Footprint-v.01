@@ -27,16 +27,26 @@ export const bg = {
     email: 'Имейл',
     password: 'Парола',
     forgotPassword: 'Забравена парола?',
+    resetPassword: 'Нова парола',
+    confirmPassword: 'Потвърдете паролата',
+    sendResetLink: 'Изпрати линк за възстановяване',
+    backToLogin: 'Обратно към вход',
     signIn: 'Вход в системата',
     signOut: 'Излез от системата',
     invalidCredentials: 'Невалиден имейл или парола',
     emailRequired: 'Имейлът е задължителен',
     passwordRequired: 'Паролата е задължителна',
+    resetEmailSent:
+      'Ако имейлът е регистриран, ще получите линк за възстановяване на паролата.',
+    passwordUpdated: 'Паролата е сменена успешно. Можете да влезете.',
+    passwordMinLength: 'Паролата трябва да е поне 8 символа',
+    passwordsMustMatch: 'Паролите не съвпадат',
+    resetLinkInvalid: 'Линкът е невалиден или изтекъл. Заявете нов.',
   },
 
   // Navigation
   nav: {
-    dashboard: 'Табло',
+    dashboard: 'Управление',
     dataEntry: 'Въвеждане на данни',
     reports: 'Отчети',
     strategies: 'Стратегии',
@@ -48,7 +58,7 @@ export const bg = {
 
   // Dashboard
   dashboard: {
-    title: 'Табло за управление',
+    title: 'Табло за управление на устойчивостта',
     totalEmissions: 'Общ въглероден отпечатък',
     scope1: 'Обхват 1',
     scope2: 'Обхват 2',
@@ -361,26 +371,11 @@ export const bg = {
     // Classification Rules
     rulesTitle: 'Правила за класификация',
     rulesDescription: 'Автоматизирайте класификацията с интелигентни правила',
-    createRule: 'Създай правило',
     editRule: 'Редактирай правило',
     deleteRule: 'Изтрий правило',
-    ruleName: 'Име на правило',
     ruleCondition: 'Условие',
     ruleOutput: 'Резултат',
     rulePriority: 'Приоритет',
-    ruleActive: 'Активно',
-    ruleInactive: 'Неактивно',
-    
-    // Rule Conditions
-    conditionType: 'Тип условие',
-    conditionField: 'Поле',
-    conditionValue: 'Стойност',
-    contains: 'Съдържа',
-    equals: 'Равно на',
-    regex: 'Регулярен израз',
-    supplier: 'Доставчик',
-    description: 'Описание',
-    expenseCategory: 'Категория разход',
     
     // Rule Actions
     applyRules: 'Приложи правила',
@@ -393,7 +388,6 @@ export const bg = {
     
     // Rule Stats
     applicationsCount: 'Брой приложения',
-    lastApplied: 'Последно приложено',
     neverApplied: 'Никога не е прилагано',
     coverage: 'Покритие',
     

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { formatMoney } from '@/lib/constants/currency';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -38,6 +39,7 @@ import {
   type StrategyTemplate,
   type TemplateCategory,
 } from '@/lib/strategy-templates';
+import { PageSkeleton } from '@/components/ui/page-skeleton';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -617,7 +619,7 @@ function TemplatePicker({
                           </p>
                         </div>
                         <div className="space-y-1">
-                          <Label className="text-xs text-gray-500">Инвестиция (лв.)</Label>
+                          <Label className="text-xs text-gray-500">Инвестиция (EUR)</Label>
                           <Input
                             type="number" step="100" min="0"
                             value={item.estimated_cost}
@@ -625,7 +627,7 @@ function TemplatePicker({
                             className="text-sm"
                           />
                           <p className="text-[10px] text-gray-400">
-                            Диапазон: {template.estimated_cost_min.toLocaleString('bg-BG')}–{template.estimated_cost_max.toLocaleString('bg-BG')}
+                            Диапазон: {template.estimated_cost_min.toLocaleString('bg-BG')}–{template.estimated_cost_max.toLocaleString('bg-BG')} EUR
                           </p>
                         </div>
                         <div className="space-y-1">
@@ -721,7 +723,7 @@ function TemplatePicker({
                 </div>
                 <div>
                   <p className="text-xs text-gray-500">Обща инвестиция</p>
-                  <p className="text-sm font-bold text-gray-700">{reviewCost.toLocaleString('bg-BG')} лв.</p>
+                  <p className="text-sm font-bold text-gray-700">{formatMoney(reviewCost)}</p>
                 </div>
               </div>
 
@@ -956,11 +958,7 @@ export default function StrategiesPage() {
   const doneInitiatives  = strategies.reduce((sum, s) => sum + (s.strategy_initiatives?.filter(i => i.status === 'completed').length ?? 0), 0);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="h-8 w-8 animate-spin text-earth-300" />
-      </div>
-    );
+    return <PageSkeleton statCards={4} />;
   }
 
   return (
@@ -982,7 +980,7 @@ export default function StrategiesPage() {
                 <Lightbulb className="h-6 w-6 text-earth-400" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Стратегии за намаляване</h1>
+                <h1 className="text-2xl font-bold text-gray-900">Стратегии и планиране</h1>
                 <p className="text-sm text-gray-500">Планирайте и проследявайте инициативи за намаляване на въглеродния отпечатък</p>
               </div>
             </div>
@@ -1100,7 +1098,7 @@ export default function StrategiesPage() {
                         <Input type="number" step="0.01" min="0" value={formData.estimated_reduction_co2e} onChange={e => setFormData({ ...formData, estimated_reduction_co2e: e.target.value })} />
                       </div>
                       <div className="space-y-2">
-                        <Label>Прогнозна инвестиция (лв.)</Label>
+                        <Label>Прогнозна инвестиция (EUR)</Label>
                         <Input type="number" step="1" min="0" value={formData.estimated_cost} onChange={e => setFormData({ ...formData, estimated_cost: e.target.value })} />
                       </div>
                     </div>

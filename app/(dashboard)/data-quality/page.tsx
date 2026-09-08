@@ -270,6 +270,65 @@ export default function DataQualityPage() {
               </Card>
             </div>
 
+            {/* Canonical footprint + evidence coverage */}
+            <div className="grid md:grid-cols-2 gap-4">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-earth-400" />
+                    Каноничен отпечатък {data.year}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center pb-4">
+                  {[
+                    { label: 'Обхват 1', val: data.footprint.scope1, color: 'text-green-700' },
+                    { label: 'Обхват 2', val: data.footprint.scope2, color: 'text-blue-700' },
+                    { label: 'Обхват 3', val: data.footprint.scope3, color: 'text-orange-700' },
+                    { label: 'Общо', val: data.footprint.total, color: 'text-earth-600 font-bold' },
+                  ].map(({ label, val, color }) => (
+                    <div key={label} className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-xs text-gray-500">{label}</p>
+                      <p className={`text-lg ${color}`}>{val.toFixed(2)}</p>
+                      <p className="text-xs text-gray-400">tCO₂e</p>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    <BookOpen className="h-4 w-4 text-purple-600" />
+                    Доказателства (одитна следа)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 pb-4">
+                  {data.evidenceCoverage.scope12Entries > 0 ? (
+                    <>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Записи с документ</span>
+                        <span className="font-semibold">
+                          {data.evidenceCoverage.scope12WithEvidence}/{data.evidenceCoverage.scope12Entries}
+                          {' '}({data.evidenceCoverage.coveragePercent}%)
+                        </span>
+                      </div>
+                      <ProgressBar
+                        value={data.evidenceCoverage.coveragePercent}
+                        color={data.evidenceCoverage.coveragePercent >= 50 ? 'bg-purple-500' : 'bg-amber-400'}
+                      />
+                      <Link href="/data-entry/list">
+                        <Button size="sm" variant="outline" className="text-xs w-full">
+                          Прикачи документи към записи →
+                        </Button>
+                      </Link>
+                    </>
+                  ) : (
+                    <p className="text-sm text-gray-500">Няма емисионни записи за {data.year}.</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
             {/* Monthly calendar heatmap */}
             <Card>
               <CardHeader className="pb-3">

@@ -13,9 +13,10 @@ const updateUserSchema = z.object({
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
     
     // Verify admin role
@@ -41,7 +42,7 @@ export async function GET(
         *,
         company:companies(company_name)
       `)
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (error) {
@@ -63,9 +64,10 @@ export async function GET(
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
     
     // Verify admin role
@@ -95,7 +97,7 @@ export async function PATCH(
     const { data, error } = await serviceSupabase
       .from('users')
       .update(validatedData)
-      .eq('id', params.id)
+      .eq('id', id)
       .select()
       .single();
 
@@ -107,7 +109,7 @@ export async function PATCH(
     
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: 'Грешка при валидация', details: error.errors },
+        { error: 'Грешка при валидация', details: error.issues },
         { status: 400 }
       );
     }

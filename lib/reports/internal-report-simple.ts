@@ -1,5 +1,7 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
+import { PDF_PLATFORM_NAME } from './pdf-text';
+import { drawPanel, R } from './pdf-shapes';
 
 interface EmissionData {
   id: string;
@@ -86,7 +88,7 @@ export async function generateInternalReport(data: ReportData): Promise<Buffer> 
     const lightGreen = rgb(0.545, 0.765, 0.290);
 
     // Header
-    page.drawText('ZED Carbon Footprint Management', {
+    page.drawText(PDF_PLATFORM_NAME, {
       x: width - 250,
       y: yPosition,
       size: 10,
@@ -196,13 +198,7 @@ export async function generateInternalReport(data: ReportData): Promise<Buffer> 
     const boxY = yPosition;
 
     // Box 1: Total
-    page.drawRectangle({
-      x: 50,
-      y: boxY - boxHeight,
-      width: boxWidth,
-      height: boxHeight,
-      color: earthGreen,
-    });
+    drawPanel(page, 50, boxY, boxWidth, boxHeight, earthGreen, earthGreen, 0, R.md);
 
     page.drawText('Общо емисии', {
       x: 60,
@@ -236,13 +232,7 @@ export async function generateInternalReport(data: ReportData): Promise<Buffer> 
     });
 
     // Box 2: Scope 1
-    page.drawRectangle({
-      x: 50 + boxWidth + boxSpacing,
-      y: boxY - boxHeight,
-      width: boxWidth,
-      height: boxHeight,
-      color: mediumGreen,
-    });
+    drawPanel(page, 50 + boxWidth + boxSpacing, boxY, boxWidth, boxHeight, mediumGreen, mediumGreen, 0, R.md);
 
     page.drawText('Обхват 1', {
       x: 60 + boxWidth + boxSpacing,
@@ -277,13 +267,7 @@ export async function generateInternalReport(data: ReportData): Promise<Buffer> 
     });
 
     // Box 3: Scope 2
-    page.drawRectangle({
-      x: 50 + (boxWidth + boxSpacing) * 2,
-      y: boxY - boxHeight,
-      width: boxWidth,
-      height: boxHeight,
-      color: lightGreen,
-    });
+    drawPanel(page, 50 + (boxWidth + boxSpacing) * 2, boxY, boxWidth, boxHeight, lightGreen, lightGreen, 0, R.md);
 
     page.drawText('Обхват 2', {
       x: 60 + (boxWidth + boxSpacing) * 2,
@@ -403,13 +387,7 @@ export async function generateInternalReport(data: ReportData): Promise<Buffer> 
     yPosition -= 30;
 
     // Table header
-    page.drawRectangle({
-      x: 50,
-      y: yPosition - 20,
-      width: 495,
-      height: 20,
-      color: earthGreen,
-    });
+    drawPanel(page, 50, yPosition, 495, 20, earthGreen, earthGreen, 0, R.sm);
 
     const headers = ['Период', 'Обхват', 'Категория', 'Количество', 'CO2e'];
     const colWidths = [80, 60, 180, 90, 85];
@@ -498,13 +476,7 @@ export async function generateInternalReport(data: ReportData): Promise<Buffer> 
     yPosition -= 30;
 
     // Category table header
-    page.drawRectangle({
-      x: 50,
-      y: yPosition - 20,
-      width: 445,
-      height: 20,
-      color: mediumGreen,
-    });
+    drawPanel(page, 50, yPosition, 445, 20, mediumGreen, mediumGreen, 0, R.sm);
 
     const catHeaders = ['Категория', 'Емисии', 'Дял'];
     const catColWidths = [280, 100, 65];
@@ -568,7 +540,7 @@ export async function generateInternalReport(data: ReportData): Promise<Buffer> 
         font: customFont,
         color: rgb(0.6, 0.6, 0.6),
       });
-      pg.drawText('Генерирано от ZED Carbon Footprint Management System', {
+      pg.drawText(`Генерирано от ${PDF_PLATFORM_NAME}`, {
         x: width / 2 - 150,
         y: 20,
         size: 8,

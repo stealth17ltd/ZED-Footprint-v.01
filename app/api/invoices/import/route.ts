@@ -1,19 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-
-// Static FX rates (base: EUR). Updated periodically.
-const FX_TO_EUR: Record<string, number> = {
-  EUR: 1.0,
-  BGN: 1 / 1.9558,   // fixed EUR/BGN rate (currency board)
-  USD: 1 / 1.08,
-  GBP: 1 / 0.86,
-  CHF: 1 / 0.97,
-};
-
-function toEUR(amount: number, currency: string): number {
-  const rate = FX_TO_EUR[currency] ?? FX_TO_EUR.EUR;
-  return Math.round(amount * rate * 100) / 100;
-}
+import { DEFAULT_CURRENCY, FX_TO_EUR, convertToEUR } from '@/lib/constants/currency';
 
 interface IncomingTransaction {
   txn_date: string;
@@ -91,10 +78,10 @@ export async function POST(request: Request) {
       supplier:            t.supplier.trim().slice(0, 255),
       description:         (t.description ?? '').trim().slice(0, 500),
       amount_original:     t.amount_original,
-      currency_original:   t.currency_original ?? 'BGN',
-      amount_base_currency: toEUR(t.amount_original, t.currency_original ?? 'BGN'),
-      base_currency:       'EUR',
-      fx_rate:             FX_TO_EUR[t.currency_original ?? 'BGN'] ?? 1,
+      currency_original:   t.currency_original ?? DEFAULT_CURRENCY,
+      amount_base_currency: convertToEUR(t.amount_original, t.currency_original ?? DEFAULT_CURRENCY),
+      base_currency:       DEFAULT_CURRENCY,
+      fx_rate:             FX_TO_EUR[t.currency_original ?? DEFAULT_CURRENCY] ?? 1,
       invoice_number:      t.invoice_number ?? null,
       created_by:          user.id,
     }));

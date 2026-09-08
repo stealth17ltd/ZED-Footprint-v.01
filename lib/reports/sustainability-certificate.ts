@@ -1,11 +1,13 @@
 /**
- * Сертификат за устойчивост — Sustainability Certificate
+ * Удостоверение за устойчивост — one-page sustainability attestation
  * Premium single-page A4 certificate suitable for display or sharing.
  * Design: Ornate double-border frame, centered layout, gold & green palette.
  */
 
-import { PDFDocument, rgb, PDFPage, PDFFont } from 'pdf-lib';
+import { PDFDocument, rgb, PDFPage, PDFFont, degrees } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
+import { PDF_PLATFORM_NAME, pdfSafeText } from './pdf-text';
+import { drawPanel, fillRounded, drawRect, R } from './pdf-shapes';
 
 // ─────────────────────────────────────────────
 // Types
@@ -50,14 +52,9 @@ const C = {
 // Drawing helpers
 // ─────────────────────────────────────────────
 
-function drawRect(page: PDFPage, x: number, y: number, w: number, h: number,
-  color: ReturnType<typeof rgb>, border?: ReturnType<typeof rgb>, borderW = 0.5) {
-  page.drawRectangle({ x, y: y - h, width: w, height: h, color, borderColor: border, borderWidth: border ? borderW : 0 });
-}
-
 function drawText(page: PDFPage, text: string, x: number, y: number, size: number,
   font: PDFFont, color = C.black, align: 'left' | 'center' | 'right' = 'left', availableWidth?: number) {
-  const t = (text ?? '').toString();
+  const t = pdfSafeText((text ?? '').toString());
   if (!t) return;
   if (align === 'center' && availableWidth) {
     const tw = font.widthOfTextAtSize(t, size);
@@ -127,7 +124,7 @@ function drawDoubleBorder(page: PDFPage, W: number, H: number) {
     [midW - diamondSize / 2, H - o1],
     [midW - diamondSize / 2, o1],
   ].forEach(([dx, dy]) => {
-    page.drawRectangle({ x: dx as number, y: (dy as number) - diamondSize / 2, width: diamondSize, height: diamondSize, color: C.gold, rotate: { type: 'degrees', angle: 45 } });
+    page.drawRectangle({ x: dx as number, y: (dy as number) - diamondSize / 2, width: diamondSize, height: diamondSize, color: C.gold, rotate: degrees(45) });
   });
 }
 
@@ -167,8 +164,8 @@ function drawOrnamentDivider(page: PDFPage, x: number, y: number, w: number) {
   drawLine(page, x, y, mid - 8, y, C.gold, 0.7);
   drawLine(page, mid + 8, y, x + w, y, C.gold, 0.7);
   // Center diamond
-  page.drawRectangle({ x: mid - 5, y: y - 5, width: 10, height: 10, color: C.gold, rotate: { type: 'degrees', angle: 45 } });
-  page.drawRectangle({ x: mid - 3, y: y - 3, width: 6, height: 6, color: C.ivory, rotate: { type: 'degrees', angle: 45 } });
+  page.drawRectangle({ x: mid - 5, y: y - 5, width: 10, height: 10, color: C.gold, rotate: degrees(45) });
+  page.drawRectangle({ x: mid - 3, y: y - 3, width: 6, height: 6, color: C.ivory, rotate: degrees(45) });
 }
 
 // ─────────────────────────────────────────────
@@ -206,8 +203,7 @@ export async function generateSustainabilityCertificate(data: CertificateData): 
   // ── Header area ──────────────────────────────────────
   // ZED Platform branding
   const headerY = H - 40;
-  drawText(page, 'ZED Bulgaria', 0, headerY, 11, font, C.deepGreen, 'center', W);
-  drawText(page, 'Carbon Footprint Platform', 0, headerY - 14, 7.5, font, C.green, 'center', W);
+  drawCenteredText(page, PDF_PLATFORM_NAME, headerY, 8.5, font, C.deepGreen, W);
 
   // Thin gold divider under branding
   drawOrnamentDivider(page, 60, headerY - 22, W - 120);
@@ -220,11 +216,10 @@ export async function generateSustainabilityCertificate(data: CertificateData): 
 
   // ── Certificate title ────────────────────────────────
   const titleY = H - 195;
-  drawCenteredText(page, 'СЕРТИФИКАТ', titleY, 32, font, C.deepGreen, W);
-  drawCenteredText(page, 'ЗА УСТОЙЧИВОСТ', titleY - 34, 26, font, C.gold, W);
+  drawCenteredText(page, 'УДОСТОВЕРЕНИЕ', titleY, 28, font, C.deepGreen, W);
+  drawCenteredText(page, 'ЗА УСТОЙЧИВОСТ', titleY - 30, 20, font, C.gold, W);
 
-  // Subtitle
-  drawCenteredText(page, 'Carbon Footprint Verified', titleY - 52, 10, font, C.gray, W);
+  drawCenteredText(page, 'Самоотчет по GHG Protocol', titleY - 48, 9, font, C.gray, W);
 
   // Gold ornament divider
   drawOrnamentDivider(page, 80, titleY - 64, W - 160);
@@ -249,9 +244,9 @@ export async function generateSustainabilityCertificate(data: CertificateData): 
 
   // Main statement
   const stmtY = nameY - 46;
-  drawCenteredText(page, 'е измерила и отчела своя въглероден отпечатък', stmtY, 10.5, font, C.darkGray, W);
-  drawCenteredText(page, `за отчетна година ${data.reportingYear} г. в съответствие с`, stmtY - 16, 10.5, font, C.darkGray, W);
-  drawCenteredText(page, 'GHG Protocol Corporate Standard и ESRS E1', stmtY - 32, 10.5, font, C.green, W);
+  drawCenteredText(page, 'е подготвила отчет за своя въглероден отпечатък', stmtY, 10.5, font, C.darkGray, W);
+  drawCenteredText(page, `за отчетна година ${data.reportingYear} г., използвайки методология`, stmtY - 16, 10.5, font, C.darkGray, W);
+  drawCenteredText(page, 'GHG Protocol Corporate Standard', stmtY - 32, 10.5, font, C.green, W);
 
   // Thin divider
   drawOrnamentDivider(page, 80, stmtY - 48, W - 160);
@@ -274,9 +269,7 @@ export async function generateSustainabilityCertificate(data: CertificateData): 
 
   statItems.forEach(({ label, sub, val, col, bg }, i) => {
     const cx = statsX + i * (cardW + cardGap);
-    drawRect(page, cx, statsY, cardW, cardH, bg, col, 0.8);
-    // top accent stripe
-    page.drawRectangle({ x: cx, y: statsY - cardH, width: cardW, height: 4, color: col });
+    drawPanel(page, cx, statsY, cardW, cardH, bg, col, 0.8, R.md, 4);
     const lw = font.widthOfTextAtSize(label, 8);
     page.drawText(label, { x: cx + (cardW - lw) / 2, y: statsY - 14, size: 8, font, color: col });
     const sublw = font.widthOfTextAtSize(sub, 7);
@@ -301,24 +294,24 @@ export async function generateSustainabilityCertificate(data: CertificateData): 
   const methY = insightY - 36;
   const methItems = [
     { label: 'Стандарт', val: 'GHG Protocol' },
-    { label: 'Верификация', val: 'Вътрешна' },
-    { label: 'Ниво данни', val: 'Ниво B/C' },
-    { label: 'ISO', val: '14064-1:2018' },
+    { label: 'Статус', val: 'Самоотчет' },
+    { label: 'Одит', val: 'Без одит' },
+    { label: 'Метод', val: 'ISO 14064-1' },
   ];
   const methBadgeW = 100;
   const methTotalW = methBadgeW * methItems.length + 8 * (methItems.length - 1);
   const methStartX = (W - methTotalW) / 2;
   methItems.forEach(({ label, val }, i) => {
     const bx = methStartX + i * (methBadgeW + 8);
-    drawRect(page, bx, methY, methBadgeW, 28, C.goldPale, C.gold, 0.6);
+    drawPanel(page, bx, methY, methBadgeW, 28, C.goldPale, C.gold, 0.6, R.sm);
     const lw = font.widthOfTextAtSize(label, 7);
     page.drawText(label, { x: bx + (methBadgeW - lw) / 2, y: methY - 10, size: 7, font, color: C.gray });
     const vw = font.widthOfTextAtSize(val, 8.5);
     page.drawText(val, { x: bx + (methBadgeW - vw) / 2, y: methY - 22, size: 8.5, font, color: C.deepGreen });
   });
 
-  // ── Signature blocks ──────────────────────────────────
-  const sigY = methY - 55;
+  // ── Signature blocks (lower on page — room above line for signing) ──
+  const sigY = 108;
   const sigLineW = 150;
   const sigGap = (W - 80 - sigLineW * 2) / 3;
 
@@ -327,28 +320,29 @@ export async function generateSustainabilityCertificate(data: CertificateData): 
   drawLine(page, leftSigX, sigY, leftSigX + sigLineW, sigY, C.darkGray, 0.6);
   const l1 = 'Подпис — Ръководство';
   const l1w = font.widthOfTextAtSize(l1, 7.5);
-  page.drawText(l1, { x: leftSigX + (sigLineW - l1w) / 2, y: sigY - 12, size: 7.5, font, color: C.gray });
-  page.drawText(data.company.company_name, { x: leftSigX, y: sigY - 22, size: 7, font, color: C.deepGreen, maxWidth: sigLineW });
+  page.drawText(l1, { x: leftSigX + (sigLineW - l1w) / 2, y: sigY - 14, size: 7.5, font, color: C.gray });
+  page.drawText(data.company.company_name, { x: leftSigX, y: sigY - 26, size: 7, font, color: C.deepGreen, maxWidth: sigLineW });
 
-  // Right signature — ZED Platform
+  // Right — issue date
   const rightSigX = W - 60 - sigGap - sigLineW;
   drawLine(page, rightSigX, sigY, rightSigX + sigLineW, sigY, C.darkGray, 0.6);
-  const r1 = 'ZED Bulgaria';
+  const r1 = 'Издаващ орган';
   const r1w = font.widthOfTextAtSize(r1, 7.5);
-  page.drawText(r1, { x: rightSigX + (sigLineW - r1w) / 2, y: sigY - 12, size: 7.5, font, color: C.gray });
+  page.drawText(r1, { x: rightSigX + (sigLineW - r1w) / 2, y: sigY - 14, size: 7.5, font, color: C.gray });
   const r2 = `Издадено: ${today}`;
   const r2w = font.widthOfTextAtSize(r2, 7);
-  page.drawText(r2, { x: rightSigX + (sigLineW - r2w) / 2, y: sigY - 22, size: 7, font, color: C.deepGreen });
+  page.drawText(r2, { x: rightSigX + (sigLineW - r2w) / 2, y: sigY - 26, size: 7, font, color: C.deepGreen });
 
-  // ZED seal (small, bottom right of sig area)
-  drawSeal(page, W / 2, sigY - 6, 14);
+  drawSeal(page, W / 2, sigY + 28, 14);
 
   // ── Bottom certificate number & date ─────────────────
-  const footY = 54;
+  const footY = 38;
   drawLine(page, 80, footY + 12, W - 80, footY + 12, C.gold, 0.5);
 
-  const certStr = `Сертификат № ${data.certNumber}  |  Отчетна година: ${data.reportingYear} г.  |  ${today}`;
+  const certStr = `Удостоверение № ${data.certNumber}  |  Отчетна година: ${data.reportingYear} г.`;
   drawCenteredText(page, certStr, footY, 7.5, font, C.gray, W);
+  drawCenteredText(page, PDF_PLATFORM_NAME, footY - 12, 6.5, font, C.gray, W);
+  drawCenteredText(page, 'Не е официален CSRD/ESRS сертификат. Не представлява правен или одиторски документ.', footY - 24, 6, font, C.gray, W);
 
   const pdfBytes = await pdfDoc.save();
   return Buffer.from(pdfBytes);

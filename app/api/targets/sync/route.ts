@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { getCompanyFootprint } from '@/lib/carbon/footprint-service';
 
 /**
  * Syncs emission targets with actual emission data
@@ -27,43 +28,18 @@ export async function POST(request: Request) {
 
     const now = new Date();
     const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth(); // 0-indexed
-    const startOfYear = `${currentYear}-01-01`;
-    const endOfYear = `${currentYear}-12-31`;
+    const currentMonth = now.getMonth();
 
     // Calculate how many months have passed in the current year
-    const monthsPassedThisYear = currentMonth + 1; // +1 because 0-indexed
-    
-    // Get current year's Scope 1 & 2 emissions (year-to-date)
-    const { data: emissionsData, error: emissionsError } = await supabase
-      .from('emission_data')
-      .select('scope, calculated_co2e')
-      .eq('company_id', userData.company_id)
-      .gte('reporting_period', startOfYear)
-      .lte('reporting_period', endOfYear);
+    const monthsPassedThisYear = currentMonth + 1;
 
-    if (emissionsError) throw emissionsError;
+    const ytdFootprint = await getCompanyFootprint(supabase, userData.company_id, currentYear);
 
-    // Get current year's Scope 3 emissions (from calculated_emissions)
-    const { data: scope3Data } = await supabase
-      .from('calculated_emissions')
-      .select('co2e_kg')
-      .eq('company_id', userData.company_id)
-      .gte('calculated_at', startOfYear)
-      .lte('calculated_at', endOfYear);
-
-    // Calculate YTD totals
-    const scope1EmissionsYTD = emissionsData?.filter(e => e.scope === 1).reduce((sum, e) => sum + (e.calculated_co2e || 0), 0) || 0;
-    const scope2EmissionsYTD = emissionsData?.filter(e => e.scope === 2).reduce((sum, e) => sum + (e.calculated_co2e || 0), 0) || 0;
-    const scope3EmissionsYTD = (scope3Data?.reduce((sum, r) => sum + (r.co2e_kg || 0), 0) || 0) / 1000; // kg → tCO2e
-    const totalEmissionsYTD  = scope1EmissionsYTD + scope2EmissionsYTD + scope3EmissionsYTD;
-
-    // Project annual emissions: (YTD / months elapsed) × 12
     const projectionFactor = monthsPassedThisYear > 0 ? 12 / monthsPassedThisYear : 1;
-    const totalEmissions  = totalEmissionsYTD  * projectionFactor;
-    const scope1Emissions = scope1EmissionsYTD * projectionFactor;
-    const scope2Emissions = scope2EmissionsYTD * projectionFactor;
-    const scope3Emissions = scope3EmissionsYTD * projectionFactor;
+    const totalEmissions  = ytdFootprint.total  * projectionFactor;
+    const scope1Emissions = ytdFootprint.scope1 * projectionFactor;
+    const scope2Emissions = ytdFootprint.scope2 * projectionFactor;
+    const scope3Emissions = ytdFootprint.scope3 * projectionFactor;
 
     // Get active targets
     const { data: targets, error: targetsError } = await supabase

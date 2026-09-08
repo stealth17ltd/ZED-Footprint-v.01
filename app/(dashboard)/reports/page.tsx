@@ -1,7 +1,9 @@
 'use client';
 
+import { DEFAULT_CURRENCY } from '@/lib/constants/currency';
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -32,11 +34,15 @@ import {
   Building2,
   ShieldCheck,
   DollarSign,
-  User
+  User,
+  ClipboardList,
+  FileSpreadsheet,
+  Braces,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-type ReportType = 'internal' | 'full' | 'csrd' | 'compliance' | 'certificate';
+type ReportType = 'internal' | 'full' | 'csrd' | 'compliance' | 'certificate' | 'vsme';
 
 const REPORT_ENDPOINTS: Record<ReportType, string> = {
   internal:    '/api/reports/generate',
@@ -44,6 +50,7 @@ const REPORT_ENDPOINTS: Record<ReportType, string> = {
   csrd:        '/api/reports/csrd',
   compliance:  '/api/reports/compliance',
   certificate: '/api/reports/certificate',
+  vsme:        '/api/reports/vsme',
 };
 
 // Category labels
@@ -83,7 +90,7 @@ interface EmissionData {
   responsible_person?: string | null;
 }
 
-const VALID_TYPES: ReportType[] = ['full', 'csrd', 'compliance', 'certificate'];
+const VALID_TYPES: ReportType[] = ['full', 'csrd', 'compliance', 'certificate', 'vsme'];
 
 function ReportsPageInner() {
   const searchParams = useSearchParams();
@@ -107,12 +114,22 @@ function ReportsPageInner() {
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [selectedEmission, setSelectedEmission] = useState<EmissionData | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [vsmeYear, setVsmeYear] = useState(new Date().getFullYear());
+  const [vsmeReadiness, setVsmeReadiness] = useState<{
+    readinessScore: number;
+    complete: number;
+    partial: number;
+    missing: number;
+    applicableTotal: number;
+  } | null>(null);
+  const [isVsmeExporting, setIsVsmeExporting] = useState(false);
+  const [isLoadingVsme, setIsLoadingVsme] = useState(false);
 
-  const reportTypes = [
+  const primaryReportTypes = [
     {
       id: 'full' as ReportType,
-      name: 'Пълен отчет Обхват 1+2+3',
-      description: 'Консолидиран PDF отчет с Обхват 1, 2 и 3 — подходящ за банки, клиенти, одитори',
+      name: 'Пълен отчет на устойчивостта',
+      description: 'Консолидиран PDF с емисии Обхват 1, 2 и 3, препоръки и методология — за банки, клиенти и одитори',
       icon: Truck,
       color: 'text-green-600',
       bgColor: 'bg-green-50',
@@ -121,37 +138,51 @@ function ReportsPageInner() {
     },
     {
       id: 'csrd' as ReportType,
-      name: 'CSRD Отчет — ESRS E1',
-      description: 'Официален отчет съгласно EU CSRD директивата и ESRS E1 стандарта — Обхват 1, 2 и 3 с пълна одитна следа и верификационен запис',
+      name: 'EU CSRD отчет — климат и емисии',
+      description: 'Официален формат по европейската директива за корпоративна устойчивост. Емисии Обхват 1–3, цели, стратегии и методология по стандарт ESRS E1.',
       icon: ShieldCheck,
       color: 'text-blue-700',
       bgColor: 'bg-blue-50',
       available: true,
-      badge: 'ESRS E1',
+      badge: 'EU CSRD',
     },
     {
-      id: 'compliance' as ReportType,
-      name: 'Отчет за съответствие',
-      description: 'Регулаторна оценка — ЗООС, CSRD, EU ETS, SBTi. Включва индекс на съответствие и приоритетен план за действие.',
-      icon: CheckCircle,
-      color: 'text-emerald-700',
-      bgColor: 'bg-emerald-50',
+      id: 'vsme' as ReportType,
+      name: 'VSME отчет (EFRAG)',
+      description: 'Доброволен EU стандарт за МСП — емисии, цели, стратегии, БЗР и управление. Подходящ извън задължителния CSRD обхват.',
+      icon: ClipboardList,
+      color: 'text-violet-700',
+      bgColor: 'bg-violet-50',
       available: true,
-      badge: 'НОВО',
+      badge: 'VSME',
     },
+  ];
+
+  const optionalReportTypes = [
     {
       id: 'certificate' as ReportType,
-      name: 'Сертификат за устойчивост',
-      description: 'Премиум едностраничен сертификат за споделяне с клиенти, банки и партньори. С емблема и официален дизайн.',
+      name: 'Удостоверение за устойчивост',
+      description: 'Едностранно удостоверение за самоотчет — за споделяне с партньори.',
       icon: Award,
       color: 'text-amber-600',
       bgColor: 'bg-amber-50',
       available: true,
-      badge: 'НОВО',
+    },
+    {
+      id: 'compliance' as ReportType,
+      name: 'Отчет за съответствие',
+      description: 'Регулаторен скрининг — ЗООС, CSRD, EU ETS, GHG Protocol.',
+      icon: CheckCircle,
+      color: 'text-emerald-700',
+      bgColor: 'bg-emerald-50',
+      available: true,
     },
   ];
 
+  const reportTypes = [...primaryReportTypes, ...optionalReportTypes];
+
   const handleGenerateReport = async () => {
+    if (reportType === 'vsme') return;
     // Validation
     if (!startDate || !endDate) {
       toast.error('Моля, изберете начална и крайна дата');
@@ -197,8 +228,8 @@ function ReportsPageInner() {
       clearInterval(stepTimer);
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Грешка при генериране на отчета');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.details || errorData.error || 'Грешка при генериране на отчета');
       }
 
       // Extract filename from Content-Disposition header
@@ -240,8 +271,118 @@ function ReportsPageInner() {
   useEffect(() => {
     if (startDate && endDate) {
       loadPreviewData();
+      setVsmeYear(new Date(endDate).getFullYear());
     }
   }, [startDate, endDate]);
+
+  useEffect(() => {
+    if (!vsmeYear || reportType !== 'vsme') return;
+    loadVsmeReadiness(vsmeYear);
+  }, [vsmeYear, reportType]);
+
+  const loadVsmeReadiness = async (year: number) => {
+    setIsLoadingVsme(true);
+    try {
+      const res = await fetch(`/api/vsme/readiness?year=${year}`);
+      if (!res.ok) {
+        setVsmeReadiness(null);
+        return;
+      }
+      const json = await res.json();
+      const data = json.data;
+      const summary = data?.summary ?? data;
+      if (summary && typeof summary.readinessScore === 'number') {
+        setVsmeReadiness({
+          readinessScore: summary.readinessScore,
+          complete: summary.complete ?? 0,
+          partial: summary.partial ?? 0,
+          missing: summary.missing ?? 0,
+          applicableTotal: summary.applicableTotal ?? 0,
+        });
+      } else if (data?.readinessScore != null) {
+        setVsmeReadiness({
+          readinessScore: data.readinessScore,
+          complete: data.complete ?? 0,
+          partial: data.partial ?? 0,
+          missing: data.missing ?? 0,
+          applicableTotal: data.applicableTotal ?? 0,
+        });
+      } else {
+        setVsmeReadiness(null);
+      }
+    } catch {
+      setVsmeReadiness(null);
+    } finally {
+      setIsLoadingVsme(false);
+    }
+  };
+
+  const downloadVsmeExport = async (format: 'pdf' | 'json' | 'excel') => {
+    setIsVsmeExporting(true);
+    try {
+      let url: string;
+      let defaultName: string;
+
+      if (format === 'pdf') {
+        const response = await fetch('/api/reports/vsme', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reportingYear: vsmeYear }),
+        });
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Грешка при генериране на VSME PDF');
+        }
+        const disposition = response.headers.get('Content-Disposition') ?? '';
+        const match = disposition.match(/filename="?([^";\n]+)"?/);
+        const filename = match?.[1] ?? `VSME-${vsmeYear}.pdf`;
+        const blob = await response.blob();
+        triggerDownload(blob, filename);
+        toast.success('VSME PDF отчетът е изтеглен успешно!');
+        return;
+      }
+
+      const endpoints: Record<Exclude<typeof format, 'pdf'>, string> = {
+        json: `/api/vsme/export?year=${vsmeYear}`,
+        excel: `/api/vsme/export/excel?year=${vsmeYear}`,
+      };
+      url = endpoints[format];
+      defaultName = format === 'excel'
+        ? `VSME-${vsmeYear}.xlsx`
+        : `VSME-${vsmeYear}.json`;
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Грешка при експорт на VSME данни');
+      }
+
+      const disposition = response.headers.get('Content-Disposition') ?? '';
+      const match = disposition.match(/filename="?([^";\n]+)"?/);
+      const filename = match?.[1] ?? defaultName;
+      const blob = await response.blob();
+      triggerDownload(blob, filename);
+
+      const labels = { json: 'JSON', excel: 'Excel' };
+      toast.success(`VSME ${labels[format]} експортът е изтеглен успешно!`);
+    } catch (error: unknown) {
+      console.error('VSME export error:', error);
+      toast.error(error instanceof Error ? error.message : 'Възникна грешка при VSME експорт');
+    } finally {
+      setIsVsmeExporting(false);
+    }
+  };
+
+  const triggerDownload = (blob: Blob, filename: string) => {
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  };
 
   const loadPreviewData = async () => {
     setIsLoadingPreview(true);
@@ -332,15 +473,19 @@ function ReportsPageInner() {
                   Кликнете на картата, за да изберете типа отчет
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3">
-                {reportTypes.map((type) => (
+              <CardContent className="space-y-4">
+                {primaryReportTypes.map((type) => (
                   <button
                     key={type.id}
                     onClick={() => type.available && setReportType(type.id)}
                     disabled={!type.available}
                     className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
                       reportType === type.id
-                        ? 'border-green-500 bg-green-50'
+                        ? type.id === 'vsme'
+                          ? 'border-violet-500 bg-violet-50'
+                          : type.id === 'csrd'
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-green-500 bg-green-50'
                         : 'border-gray-200 hover:border-gray-300 bg-white'
                     } ${
                       !type.available ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
@@ -354,16 +499,19 @@ function ReportsPageInner() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <h3 className="font-semibold text-gray-900">{type.name}</h3>
                           {reportType === type.id && (
-                            <CheckCircle className="h-5 w-5 text-green-600" />
+                            <CheckCircle className={`h-5 w-5 ${
+                              type.id === 'vsme' ? 'text-violet-600'
+                                : type.id === 'csrd' ? 'text-blue-600'
+                                  : 'text-green-600'
+                            }`} />
                           )}
-                          {(type as any).badge && (
-                            <span className="text-xs bg-green-600 text-white px-2 py-0.5 rounded font-medium">
-                              {(type as any).badge}
-                            </span>
-                          )}
-                          {!type.available && (
-                            <span className="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded">
-                              Скоро
+                          {(type as { badge?: string }).badge && (
+                            <span className={`text-xs text-white px-2 py-0.5 rounded font-medium ${
+                              type.id === 'vsme' ? 'bg-violet-600'
+                                : type.id === 'csrd' ? 'bg-blue-600'
+                                  : 'bg-green-600'
+                            }`}>
+                              {(type as { badge?: string }).badge}
                             </span>
                           )}
                         </div>
@@ -372,10 +520,136 @@ function ReportsPageInner() {
                     </div>
                   </button>
                 ))}
+
+                <div className="pt-2 border-t border-gray-100">
+                  <p className="text-xs text-gray-500 mb-2">Допълнителни документи</p>
+                  <div className="flex flex-wrap gap-2">
+                    {optionalReportTypes.map((type) => (
+                      <button
+                        key={type.id}
+                        onClick={() => type.available && setReportType(type.id)}
+                        disabled={!type.available}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                          reportType === type.id
+                            ? 'border-earth-400 bg-earth-50 text-earth-600'
+                            : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                        } ${!type.available ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                      >
+                        <type.icon className={`h-3.5 w-3.5 ${type.color}`} />
+                        {type.name}
+                        {reportType === type.id && <CheckCircle className="h-3 w-3 text-earth-500" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
-            {/* Date Range Selection */}
+            {reportType === 'vsme' && (
+              <Card className="border-violet-200 bg-gradient-to-br from-violet-50/60 to-white">
+                <CardHeader>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <CardTitle className="text-violet-900">VSME — какво е и защо ви трябва</CardTitle>
+                      <CardDescription className="mt-2 text-gray-700 leading-relaxed max-w-2xl">
+                        <strong>VSME</strong> (Voluntary Sustainability Reporting Standard for SMEs) е доброволен
+                        стандарт на <strong>EFRAG</strong> за малки и средни предприятия. Той дава структуриран
+                        ESG отчет — емисии (Обхват 1–3), цели, стратегии, локации, здраве и безопасност и
+                        анти-корупция — без пълната сложност на CSRD/ESRS за големи компании.
+                      </CardDescription>
+                    </div>
+                    <span className="text-xs bg-violet-600 text-white px-2 py-0.5 rounded font-medium shrink-0">VSME</span>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-gray-700">
+                    <div className="rounded-lg border border-violet-100 bg-white p-3">
+                      <p className="font-medium text-violet-900 mb-1">За кого е</p>
+                      <p className="text-xs text-gray-600">МСП извън задължителния CSRD обхват, които искат ESG прозрачност пред банки, клиенти и партньори.</p>
+                    </div>
+                    <div className="rounded-lg border border-violet-100 bg-white p-3">
+                      <p className="font-medium text-violet-900 mb-1">Какво включва</p>
+                      <p className="text-xs text-gray-600">Профил на компанията, емисии, цели, стратегии, локации, БЗР и политика срещу корупция.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-end gap-4 pt-2 border-t border-violet-100">
+                    <div className="space-y-2 sm:w-40">
+                      <Label htmlFor="vsme-year-main">Отчетна година</Label>
+                      <Select value={String(vsmeYear)} onValueChange={(v) => setVsmeYear(parseInt(v))}>
+                        <SelectTrigger id="vsme-year-main">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {[2026, 2025, 2024, 2023].map((y) => (
+                            <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex-1">
+                      {isLoadingVsme ? (
+                        <p className="text-sm text-gray-500 flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" /> Зареждане на готовност...
+                        </p>
+                      ) : vsmeReadiness && vsmeReadiness.applicableTotal > 0 ? (
+                        <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
+                          <div>
+                            <span className="text-gray-600">Готовност: </span>
+                            <span className="font-bold text-violet-900">{vsmeReadiness.readinessScore}%</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Готови: </span>
+                            <span className="font-semibold text-green-700">{vsmeReadiness.complete}/{vsmeReadiness.applicableTotal}</span>
+                          </div>
+                          {vsmeReadiness.partial > 0 && (
+                            <div>
+                              <span className="text-gray-600">Частични: </span>
+                              <span className="font-semibold text-amber-700">{vsmeReadiness.partial}</span>
+                            </div>
+                          )}
+                          {vsmeReadiness.missing > 0 && (
+                            <div>
+                              <span className="text-gray-600">Липсващи: </span>
+                              <span className="font-semibold text-red-600">{vsmeReadiness.missing}</span>
+                            </div>
+                          )}
+                        </div>
+                      ) : vsmeReadiness ? (
+                        <p className="text-sm text-amber-700">Няма оценени VSME теми за {vsmeYear} г. — проверете данните.</p>
+                      ) : (
+                        <p className="text-sm text-gray-500">Неуспешно зареждане на готовността.</p>
+                      )}
+                      <Link href="/vsme" className="text-xs text-violet-700 underline mt-1 inline-block">
+                        Детайлен преглед и попълване →
+                      </Link>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    <Button
+                      onClick={() => downloadVsmeExport('pdf')}
+                      disabled={isVsmeExporting}
+                      className="bg-violet-700 hover:bg-violet-800 text-white"
+                    >
+                      <Download className="mr-2 h-4 w-4" />
+                      PDF отчет
+                    </Button>
+                    <Button variant="outline" onClick={() => downloadVsmeExport('excel')} disabled={isVsmeExporting}>
+                      <FileSpreadsheet className="mr-2 h-4 w-4" />
+                      Excel
+                    </Button>
+                    <Button variant="outline" onClick={() => downloadVsmeExport('json')} disabled={isVsmeExporting}>
+                      <Braces className="mr-2 h-4 w-4" />
+                      JSON
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Date Range Selection — hidden for VSME (uses calendar year) */}
+            {reportType !== 'vsme' && (
             <Card>
               <CardHeader>
                 <CardTitle>Изберете период</CardTitle>
@@ -465,14 +739,18 @@ function ReportsPageInner() {
                 </div>
               </CardContent>
             </Card>
+            )}
           </div>
 
-          {/* Right Column - Summary & Generate */}
+          {/* Right Column - Summary & Generate / VSME */}
           <div className="space-y-6">
-            {/* Summary Card */}
-            <Card className="border-earth-200 bg-gradient-to-br from-earth-50 to-white">
+            <Card className={reportType === 'vsme'
+              ? 'border-violet-200 bg-gradient-to-br from-violet-50/80 to-white'
+              : 'border-earth-200 bg-gradient-to-br from-earth-50 to-white'}>
               <CardHeader>
-                <CardTitle className="text-earth-400">Обобщение</CardTitle>
+                <CardTitle className={reportType === 'vsme' ? 'text-violet-900' : 'text-earth-400'}>
+                  {reportType === 'vsme' ? 'VSME експорт' : 'Обобщение'}
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
@@ -482,6 +760,22 @@ function ReportsPageInner() {
                   </p>
                 </div>
 
+                {reportType === 'vsme' ? (
+                  <>
+                    <div className="border-t pt-4">
+                      <p className="text-sm text-gray-600 mb-1">Отчетна година</p>
+                      <p className="font-semibold text-gray-900">{vsmeYear}</p>
+                    </div>
+                    <div className="border-t pt-4">
+                      <p className="text-sm text-gray-600 mb-1">Формат</p>
+                      <p className="font-semibold text-gray-900">PDF · Excel · JSON</p>
+                    </div>
+                    <p className="text-xs text-violet-700 pt-2">
+                      Използвайте панела вляво за година, готовност и експорт.
+                    </p>
+                  </>
+                ) : (
+                  <>
                 {startDate && endDate && (
                   <>
                     <div className="border-t pt-4">
@@ -502,7 +796,6 @@ function ReportsPageInner() {
                   </>
                 )}
 
-                {/* Generate Button */}
                 <Button
                   onClick={handleGenerateReport}
                   disabled={isGenerating || !reportTypes.find(t => t.id === reportType)?.available}
@@ -526,27 +819,63 @@ function ReportsPageInner() {
                     </>
                   )}
                 </Button>
+                  </>
+                )}
 
               </CardContent>
             </Card>
 
             {/* Info Card */}
-            <Card className="border-blue-200 bg-blue-50">
+            <Card className={reportType === 'vsme' ? 'border-violet-200 bg-violet-50' : 'border-blue-200 bg-blue-50'}>
               <CardHeader>
-                <CardTitle className="text-sm text-blue-900">Информация</CardTitle>
+                <CardTitle className={`text-sm ${reportType === 'vsme' ? 'text-violet-900' : 'text-blue-900'}`}>
+                  Информация
+                </CardTitle>
               </CardHeader>
-              <CardContent className="text-sm text-blue-800 space-y-2">
-                <p>• Отчетът ще включва всички емисии за избрания период</p>
-                <p>• PDF файлът се изтегля директно</p>
-                <p>• Отчетите са съобразени с CSRD изисквания</p>
-                <p>• Можете да генерирате неограничен брой отчети</p>
+              <CardContent className={`text-sm space-y-2 ${reportType === 'vsme' ? 'text-violet-900' : 'text-blue-800'}`}>
+                {reportType === 'vsme' ? (
+                  <>
+                    <p>• <strong>VSME</strong> — доброволен EFRAG стандарт за устойчивост на МСП (2024–2025)</p>
+                    <p>• По-лек от CSRD — подходящ за компании под праговете за задължителна ESRS отчетност</p>
+                    <p>• Покрива емисии, цели, стратегии, локации, БЗР и анти-корупция</p>
+                    <p>• PDF отчетът включва контролен списък, емисии и препоръчани действия</p>
+                    <p>• Не е официален одит — прегледайте готовността преди споделяне</p>
+                  </>
+                ) : reportType === 'certificate' ? (
+                  <>
+                    <p>• Едностранно удостоверение за самоотчет</p>
+                    <p>• Не е независимо верифицирано или официален CSRD документ</p>
+                    <p>• Подходящо за презентации и начални разговори с партньори</p>
+                    <p>• PDF файлът се изтегля директно</p>
+                  </>
+                ) : reportType === 'full' ? (
+                  <>
+                    <p>• Пълен отчет на устойчивостта с Обхват 1, 2 и 3</p>
+                    <p>• Включва препоръки за намаляване на емисиите</p>
+                    <p>• Подходящ за банки, клиенти и вътрешен одит</p>
+                    <p>• Изберете период, който покрива цялата отчетна година</p>
+                  </>
+                ) : reportType === 'csrd' ? (
+                  <>
+                    <p>• EU CSRD — официален формат за корпоративна устойчивост</p>
+                    <p>• ESRS E1: климат, емисии Обхват 1–3, цели и стратегии</p>
+                    <p>• За компании в или близо до CSRD обхват</p>
+                    <p>• PDF файлът се изтегля директно</p>
+                  </>
+                ) : (
+                  <>
+                    <p>• Регулаторен скрининг: ЗООС, CSRD, EU ETS</p>
+                    <p>• Жив преглед в Настройки → Регулаторен скрининг</p>
+                    <p>• PDF файлът се изтегля директно</p>
+                  </>
+                )}
               </CardContent>
             </Card>
           </div>
         </div>
 
         {/* Report Preview Section */}
-        {startDate && endDate && (
+        {reportType !== 'vsme' && startDate && endDate && (
           <div className="space-y-6">
             {/* Preview Header */}
             <div className="flex items-center justify-between">
@@ -942,7 +1271,7 @@ function ReportsPageInner() {
                             {selectedEmission.cost.toLocaleString('bg-BG', { 
                               minimumFractionDigits: 2,
                               maximumFractionDigits: 2 
-                            })} {selectedEmission.currency || 'BGN'}
+                            })} {selectedEmission.currency || DEFAULT_CURRENCY}
                           </p>
                         </div>
                       </div>

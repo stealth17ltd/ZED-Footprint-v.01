@@ -62,8 +62,8 @@ export default function CreateUserPage() {
       return;
     }
 
-    if (formData.password.length < 6) {
-      toast.error('Паролата трябва да е поне 6 символа');
+    if (formData.password.length < 8) {
+      toast.error('Паролата трябва да е поне 8 символа');
       return;
     }
 
@@ -183,13 +183,13 @@ export default function CreateUserPage() {
                   id="password"
                   type="password"
                   required
-                  minLength={6}
+                  minLength={8}
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  placeholder="Минимум 6 символа"
+                  placeholder="Минимум 8 символа"
                 />
                 <p className="text-xs text-gray-500">
-                  Поне 6 символа. Потребителят може да я смени след влизане.
+                  Поне 8 символа. Потребителят може да я смени след влизане.
                 </p>
               </div>
             </CardContent>

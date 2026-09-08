@@ -24,24 +24,26 @@ export async function middleware(req: NextRequest) {
     },
   );
 
-  // Wrap in try/catch so a Supabase network failure (token refresh) never
-  // crashes the middleware or spams the console. Fall back to unauthenticated.
-  let session = null;
+  // Validate session server-side (getUser verifies JWT with Supabase — safer than getSession)
+  let user = null;
   try {
-    const { data } = await supabase.auth.getSession();
-    session = data?.session ?? null;
+    const { data } = await supabase.auth.getUser();
+    user = data?.user ?? null;
   } catch {
-    // Supabase unreachable or token refresh failed — treat as unauthenticated
+    // Supabase unreachable — treat as unauthenticated
   }
 
-  const isLoginPath = req.nextUrl.pathname.startsWith('/login');
+  const pathname = req.nextUrl.pathname;
+  const publicPaths = ['/login', '/forgot-password', '/reset-password', '/auth/callback'];
+  const isPublicPath = publicPaths.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  const isLoginPath = pathname.startsWith('/login');
 
-  if (!session && !isLoginPath) {
+  if (!user && !isPublicPath) {
     const loginUrl = new URL('/login', req.url);
     return NextResponse.redirect(loginUrl);
   }
 
-  if (session && isLoginPath) {
+  if (user && isLoginPath) {
     const dashboardUrl = new URL('/dashboard', req.url);
     return NextResponse.redirect(dashboardUrl);
   }

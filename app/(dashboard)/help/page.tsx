@@ -6,7 +6,8 @@ import {
   ExternalLink, Target, GitCompareArrows, Leaf, Tag, Zap,
   Receipt, Shield, Award, FileCheck, TrendingDown, Database,
   ChevronRight, Globe, Flame, Package, Lightbulb, Lock, Sparkles,
-  ListChecks, Trophy,
+  ListChecks, Trophy, ShieldCheck, Factory, Calculator, Paperclip,
+  ClipboardList,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -58,18 +59,15 @@ export default function HelpPage() {
         {/* ── Quick links ── */}
         <div>
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Бърз достъп</h2>
-          <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-11 gap-3">
-            <QuickLink href="/dashboard"         icon={BarChart}         label="Табло"          color="border-earth-200 text-earth-600"  />
+          <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+            <QuickLink href="/dashboard"         icon={BarChart}         label="Управление"   color="border-earth-200 text-earth-600"  />
             <QuickLink href="/data-entry"        icon={PlusCircle}       label="Данни 1&2"      color="border-green-200 text-green-700"  />
             <QuickLink href="/scope3/import"     icon={Upload}           label="Импорт S3"      color="border-blue-200 text-blue-700"    />
-            <QuickLink href="/invoice-import"    icon={Receipt}          label="Фактури"        sub="НОВО" color="border-blue-200 text-blue-700" />
-            <QuickLink href="/scope3/classify"   icon={Tag}              label="Класиф."        color="border-blue-200 text-blue-700"    />
+            <QuickLink href="/invoice-import"    icon={Receipt}          label="Фактури"        color="border-blue-200 text-blue-700" />
             <QuickLink href="/reports"           icon={FileText}         label="Отчети"         color="border-purple-200 text-purple-700" />
-            <QuickLink href="/targets"           icon={Target}           label="Цели"           color="border-amber-200 text-amber-700"  />
-            <QuickLink href="/strategies"        icon={Lightbulb}        label="Стратегии"      sub="НОВО" color="border-amber-200 text-amber-600" />
-            <QuickLink href="/benchmark"         icon={Trophy}           label="Бенчмарк"       color="border-indigo-200 text-indigo-700" />
+            <QuickLink href="/settings/compliance" icon={ShieldCheck}   label="Скрининг"       sub="НОВО" color="border-emerald-200 text-emerald-700" />
             <QuickLink href="/data-quality"      icon={Shield}           label="Качество"       color="border-teal-200 text-teal-700"    />
-            <QuickLink href="/scope3/dashboard"  icon={Leaf}             label="Табло S3"       color="border-teal-200 text-teal-700"    />
+            <QuickLink href="/onboarding?guide=true" icon={ClipboardList} label="Наръчник"    color="border-earth-200 text-earth-600" />
           </div>
         </div>
 
@@ -192,7 +190,7 @@ export default function HelpPage() {
                     <li><code>transaction_date</code> — дата на транзакцията</li>
                     <li><code>supplier_name</code> — доставчик/контрагент</li>
                     <li><code>amount</code> — сума</li>
-                    <li><code>currency</code> — валута (EUR, BGN, USD …)</li>
+                    <li><code>currency</code> — валута (EUR, USD, GBP, CHF …)</li>
                     <li><code>description</code> — описание (помага за авто-класификация)</li>
                   </ul>
                   <p className="text-sm">
@@ -223,7 +221,7 @@ export default function HelpPage() {
                     <li><strong>Доставчик</strong> — фирмата-издател на фактурата</li>
                     <li><strong>Дата</strong> — дата на издаване</li>
                     <li><strong>Сума</strong> — крайна сума с ДДС</li>
-                    <li><strong>Валута</strong> — BGN, EUR, USD и др.</li>
+                    <li><strong>Валута</strong> — EUR (платформата работи само в евро)</li>
                     <li><strong>Описание</strong> — наименование на услугата/стоката</li>
                     <li><strong>Номер на фактура</strong> — за референция</li>
                   </ul>
@@ -338,19 +336,151 @@ export default function HelpPage() {
                       <FileCheck className="h-5 w-5 text-purple-600 mt-0.5 shrink-0" />
                       <div>
                         <p className="font-semibold text-sm">Регулаторен отчет</p>
-                        <p className="text-xs text-gray-600">Преглед на съответствие с 8 регулации (ЗООС, EU ETS, CSRD, EU Taxonomy, GHG Protocol, SBTi, ISO 14064). Включва оценка и план за действие.</p>
+                        <p className="text-xs text-gray-600">PDF по версиониран rule engine (2026-08): ЗООС, EU ETS (инсталации), CSRD обхват, GHG Protocol, SBTi, ISO 14064. Реалистичен индекс на готовност — не фиктивно 100%.</p>
                       </div>
                     </div>
                     <div className="flex gap-3 p-3 bg-amber-50 rounded-lg">
                       <Award className="h-5 w-5 text-amber-500 mt-0.5 shrink-0" />
                       <div>
-                        <p className="font-semibold text-sm">Сертификат за устойчивост</p>
-                        <p className="text-xs text-gray-600">Представителен сертификат с ключови показатели за споделяне с клиенти и партньори. С уникален номер и официален дизайн.</p>
+                        <p className="font-semibold text-sm">Удостоверение за устойчивост</p>
+                        <p className="text-xs text-gray-600">Едностранно удостоверение за самоотчет с ключови показатели — за споделяне с клиенти и партньори.</p>
                       </div>
                     </div>
                   </div>
                   <Link href="/reports" className="inline-flex items-center gap-1 text-sm text-purple-600 hover:underline">
                     Генерирай отчет <ChevronRight className="h-3 w-3" />
+                  </Link>
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* ═══ COMPLIANCE & REGULATORY ═══ */}
+              <AccordionItem value="compliance-screening">
+                <AccordionTrigger className="text-left">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <span className="font-semibold">Регулаторен скрининг — как работи rule engine?</span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="text-gray-700 space-y-2">
+                  <Badge className="mb-2 bg-emerald-100 text-emerald-700">Нова функция</Badge>
+                  <p>
+                    Страница <strong>Настройки → Регулаторен скрининг</strong> показва <em>жив</em> преглед
+                    на съответствието — без да чакате PDF. Движковете правила са версионирани и консервативни:
+                    неизвестни данни водят до „Преглед“, а не до фиктивно „Изпълнено“.
+                  </p>
+                  <p><strong>Какво оценява:</strong></p>
+                  <ul className="list-disc list-inside space-y-1 ml-4 text-sm">
+                    <li><strong>CSRD обхват</strong> — &gt;1000 служители <em>и</em> &gt;€450M оборот (вер. 2026-02-EU)</li>
+                    <li><strong>EU ETS</strong> — инсталационен скрининг (MW, Annex I), не общ корпоративен tCO₂e</li>
+                    <li><strong>ЗООС / Наредба 6 & 7</strong> — разделени BG изисквания</li>
+                    <li><strong>GHG Protocol, SBTi, ISO 14064</strong> — методология и цели</li>
+                  </ul>
+                  <p className="text-sm text-gray-500">
+                    Попълнете <strong>оборот (EUR)</strong> и EU ETS въпросника в профила на компанията за по-точна CSRD/EU ETS оценка.
+                  </p>
+                  <Link href="/settings/compliance" className="inline-flex items-center gap-1 text-sm text-emerald-600 hover:underline mt-1">
+                    Отиди на Регулаторен скрининг <ChevronRight className="h-3 w-3" />
+                  </Link>
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="compliance-ets">
+                <AccordionTrigger className="text-left">
+                  <div className="flex items-center gap-2">
+                    <Factory className="h-4 w-4 text-blue-600 shrink-0" />
+                    <span className="font-semibold">EU ETS въпросник — какво да попълня?</span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="text-gray-700 space-y-2">
+                  <Badge className="mb-2 bg-blue-100 text-blue-700">Нова функция</Badge>
+                  <p>
+                    В <strong>Настройки → Профил на компанията</strong> има карта <em>EU ETS скрининг</em>.
+                    Тя не заменя правен преглед, но позволява на платформата да оцени дали компанията вероятно
+                    попада под Directive 2003/87/EC.
+                  </p>
+                  <ul className="list-disc list-inside space-y-1 ml-4 text-sm">
+                    <li><strong>Инсталация</strong> — Да / Не / Не е попълнено</li>
+                    <li><strong>Топлинен вход (MW)</strong> — праг ≥20 MW → „Преглед“</li>
+                    <li><strong>Annex I дейност</strong> — производствена/енергийна дейност по приложение I</li>
+                  </ul>
+                  <Link href="/settings/company" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline mt-1">
+                    Попълни EU ETS въпросник <ChevronRight className="h-3 w-3" />
+                  </Link>
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="calc-snapshots">
+                <AccordionTrigger className="text-left">
+                  <div className="flex items-center gap-2">
+                    <Calculator className="h-4 w-4 text-indigo-600 shrink-0" />
+                    <span className="font-semibold">Проследимост на изчисления — snapshots</span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="text-gray-700 space-y-2">
+                  <Badge className="mb-2 bg-indigo-100 text-indigo-700">Нова функция</Badge>
+                  <p>
+                    При всеки запис за Обхват 1&2 системата запазва <strong>calculation snapshot</strong> —
+                    замразена копия на приложения емисионен фактор, формула и резултат. Така историческите
+                    отчети остават възпроизводими, дори ако факторите в базата се обновят.
+                  </p>
+                  <p className="text-sm">
+                    Отворете <strong>Данни → Списък записи</strong>, изберете запис и вижте панела
+                    „Детайли на изчислението“ — показва фактор, източник, GWP и формула.
+                  </p>
+                  <Link href="/data-entry/list" className="inline-flex items-center gap-1 text-sm text-indigo-600 hover:underline mt-1">
+                    Виж записи и изчисления <ChevronRight className="h-3 w-3" />
+                  </Link>
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="evidence-1">
+                <AccordionTrigger className="text-left">
+                  <div className="flex items-center gap-2">
+                    <Paperclip className="h-4 w-4 text-teal-600 shrink-0" />
+                    <span className="font-semibold">Доказателства (evidence) — как да прикача фактури?</span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="text-gray-700 space-y-2">
+                  <Badge className="mb-2 bg-teal-100 text-teal-700">Нова функция</Badge>
+                  <p>
+                    Към всеки запис за Обхват 1&2 можете да прикачите <strong>доказателствен документ</strong>
+                    (PDF, изображение) — фактура, сметка, измерване. Файловете се съхраняват сигурно и
+                    се отчитат в <strong>Качество на данните</strong> и CSRD отчетите.
+                  </p>
+                  <ul className="list-disc list-inside space-y-1 ml-4 text-sm">
+                    <li>Отворете детайли на запис от списъка с данни</li>
+                    <li>Използвайте секцията „Доказателства“ за качване</li>
+                    <li>Покритието с evidence влияе на общата оценка за качество</li>
+                  </ul>
+                  <Link href="/data-quality" className="inline-flex items-center gap-1 text-sm text-teal-600 hover:underline mt-1">
+                    Виж покритие на доказателства <ChevronRight className="h-3 w-3" />
+                  </Link>
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="setup-guide">
+                <AccordionTrigger className="text-left">
+                  <div className="flex items-center gap-2">
+                    <ClipboardList className="h-4 w-4 text-earth-500 shrink-0" />
+                    <span className="font-semibold">Наръчник за настройка — кога да го ползвам?</span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="text-gray-700 space-y-2">
+                  <p>
+                    <strong>Наръчникът за настройка</strong> е интерактивен wizard, достъпен от
+                    <em> Профил → Наръчник за настройка</em>. Полезен е при:
+                  </p>
+                  <ul className="list-disc list-inside space-y-1 ml-4 text-sm">
+                    <li>Първо влизане — настройка на компания, данни, цели и стратегии</li>
+                    <li>Обучение на нов колега — преминаване през всички модули</li>
+                    <li>Регулаторен скрининг — попълване на оборот и EU ETS въпросник</li>
+                  </ul>
+                  <p className="text-sm text-gray-500">
+                    В режим „наръчник“ (guide=true) wizard-ът не блокира достъпа до таблото — можете да го
+                    преминете многократно.
+                  </p>
+                  <Link href="/onboarding?guide=true" className="inline-flex items-center gap-1 text-sm text-earth-600 hover:underline mt-1">
+                    Стартирай наръчника <ChevronRight className="h-3 w-3" />
                   </Link>
                 </AccordionContent>
               </AccordionItem>
@@ -457,6 +587,8 @@ export default function HelpPage() {
                   <ul className="list-disc list-inside space-y-1 ml-4 text-sm">
                     <li>Покритие на месеците — кои периоди имат данни за Обхват 1, 2 и 3</li>
                     <li>Процент класифицирани Обхват 3 транзакции</li>
+                    <li>Каноничен въглероден отпечатък (един източник на истина за всички модули)</li>
+                    <li>Покритие с доказателства (evidence) за записи Обхват 1&2</li>
                     <li>Зададени цели и базова година</li>
                     <li>Конкретни съвети за подобрение с приоритет</li>
                   </ul>
@@ -474,7 +606,7 @@ export default function HelpPage() {
                 <AccordionTrigger className="text-left">
                   <div className="flex items-center gap-2">
                     <Lightbulb className="h-4 w-4 text-amber-500 shrink-0" />
-                    <span className="font-semibold">Стратегии за намаляване — как работят?</span>
+                    <span className="font-semibold">Стратегии и планиране — как работят?</span>
                   </div>
                 </AccordionTrigger>
                 <AccordionContent className="text-gray-700 space-y-3">
@@ -647,16 +779,21 @@ export default function HelpPage() {
                 <AccordionContent className="text-gray-700 space-y-2">
                   <p>
                     <strong>CSRD</strong> (Corporate Sustainability Reporting Directive) е европейска директива,
-                    задължаваща компаниите да отчитат въздействието си върху климата.
-                    Прилага се поетапно от 2024 г.
+                    задължаваща големи компании да отчитат въздействието си върху климата.
+                    От 2026 г. задължителният обхват включва компании с <strong>&gt;1000 служители</strong> и
+                    <strong> &gt;€450M годишен оборот</strong> (вер. 2026-02-EU).
                   </p>
                   <p>
                     <strong>ESRS E1</strong> е стандартът за климатично отчитане в рамките на CSRD —
                     изисква отчитане на Обхват 1, 2 и 3 емисии, цели за намаляване и управленски процеси.
                   </p>
                   <p className="text-sm text-gray-500">
-                    ZED генерира CSRD-съвместим PDF отчет по ESRS E1, готов за регулаторно подаване.
+                    МСП извън задължителния обхват могат да използват доброволна <strong>VSME</strong> или ESRS E1 отчетност.
+                    ZED оценява CSRD обхвата в Регулаторен скрининг и генерира CSRD-съвместим PDF.
                   </p>
+                  <Link href="/settings/compliance" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline mt-1">
+                    Провери CSRD обхват <ChevronRight className="h-3 w-3" />
+                  </Link>
                 </AccordionContent>
               </AccordionItem>
 
@@ -681,6 +818,29 @@ export default function HelpPage() {
                     В раздел Цели, целите с <strong>SBTi badge</strong> отговарят на тези критерии.
                     Страница Сравнение показва дали постигнатото намаление надхвърля SBTi прага.
                   </p>
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="vsme-1">
+                <AccordionTrigger className="text-left">
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="h-4 w-4 text-indigo-600 shrink-0" />
+                    <span className="font-semibold">VSME — доброволен стандарт за МСП</span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="text-gray-700 space-y-2">
+                  <Badge className="mb-2 bg-indigo-100 text-indigo-700">Нова функция</Badge>
+                  <p>
+                    <strong>VSME</strong> (Voluntary SME Standard) е доброволна рамка на EFRAG за
+                    не-листвани МСП. Подходяща е особено ако сте <em>извън задължителен CSRD обхват</em>.
+                  </p>
+                  <p className="text-sm">
+                    Страница <strong>VSME готовност</strong> (меню <strong>Анализ → VSME готовност</strong>) показва автоматична готовност по разкривания B3 (емисии),
+                    C3 (цели) и C4 (стратегии) от данните, които вече сте въвели в ZED.
+                  </p>
+                  <Link href="/vsme" className="inline-flex items-center gap-1 text-sm text-indigo-600 hover:underline mt-1">
+                    Виж VSME готовност <ChevronRight className="h-3 w-3" />
+                  </Link>
                 </AccordionContent>
               </AccordionItem>
 

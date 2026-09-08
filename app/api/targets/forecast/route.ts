@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { getScopedFootprint } from '@/lib/carbon/footprint-service';
 
 export interface ForecastPoint {
   year: number;
@@ -78,38 +79,14 @@ export async function GET(request: Request) {
     }
 
     for (const year of yearsToFetch) {
-      const start = `${year}-01-01`;
-      const end   = `${year}-12-31`;
-
-      if (target.scope === 3) {
-        // Scope 3: pull from calculated_emissions
-        const { data: s3 } = await supabase
-          .from('calculated_emissions')
-          .select('co2e_kg')
-          .eq('company_id', userData.company_id)
-          .gte('calculated_at', start)
-          .lte('calculated_at', end);
-
-        if (s3 && s3.length > 0) {
-          historicalData[year] = s3.reduce((s, r) => s + (r.co2e_kg || 0), 0) / 1000; // kg → tCO2e
-        }
-      } else {
-        // Scope 1/2 (or all): pull from emission_data
-        let q = supabase
-          .from('emission_data')
-          .select('scope, calculated_co2e')
-          .eq('company_id', userData.company_id)
-          .gte('reporting_period', start)
-          .lte('reporting_period', end);
-
-        if (target.scope === 1 || target.scope === 2) {
-          q = q.eq('scope', target.scope);
-        }
-
-        const { data: ed } = await q;
-        if (ed && ed.length > 0) {
-          historicalData[year] = ed.reduce((s, r) => s + (r.calculated_co2e || 0), 0);
-        }
+      const total = await getScopedFootprint(
+        supabase,
+        userData.company_id,
+        year,
+        target.scope ?? null,
+      );
+      if (total > 0) {
+        historicalData[year] = total;
       }
     }
 

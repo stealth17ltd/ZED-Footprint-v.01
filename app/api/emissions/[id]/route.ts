@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
+import { currencySchema, normalizeCostForStorage } from '@/lib/constants/currency';
 import { createClient } from '@/lib/supabase/server';
 import { createServiceClient } from '@/lib/supabase/service';
 import { z } from 'zod';
 import { lookupEmissionFactor } from '@/lib/emission-factors-lookup';
+import { writeCalculationSnapshot } from '@/lib/carbon/calculation-snapshot';
 
 const updateSchema = z.object({
   scope:              z.number().int().min(1).max(2).optional(),
@@ -19,7 +21,7 @@ const updateSchema = z.object({
   measurement_method: z.enum(['measured', 'calculated', 'estimated']).optional(),
   data_quality:       z.enum(['high', 'medium', 'low']).optional(),
   cost:               z.number().optional().nullable(),
-  currency:           z.enum(['BGN', 'EUR', 'USD']).optional(),
+  currency:           currencySchema.optional(),
   responsible_person: z.string().optional().nullable(),
 });
 
@@ -52,11 +54,17 @@ export async function PATCH(
     const updates: Record<string, unknown> = { ...validated };
 
     const needsRecalc = validated.activity_value !== undefined || validated.category !== undefined;
+    let snapshotContext: {
+      actVal: number;
+      cat: string;
+      unit: string;
+      efData: Awaited<ReturnType<typeof lookupEmissionFactor>>;
+    } | null = null;
+
     if (needsRecalc) {
-      // Fetch current record to fill in any missing values
       const { data: current } = await supabase
         .from('emission_data')
-        .select('activity_value, category')
+        .select('activity_value, category, unit')
         .eq('id', id)
         .eq('company_id', userData.company_id)
         .single();
@@ -67,18 +75,18 @@ export async function PATCH(
 
       const actVal = validated.activity_value ?? current.activity_value;
       const cat    = validated.category ?? current.category;
+      const unit   = validated.unit ?? current.unit;
 
-      // DB-first factor lookup with static fallback
       const efData = await lookupEmissionFactor(cat);
       if (efData) {
         updates.emission_factor       = efData.factor;
         updates.emission_factor_value = efData.effectiveFactor;
         updates.gwp_factor            = efData.gwp;
         updates.calculated_co2e       = (actVal * efData.effectiveFactor) / 1000;
-        // Refresh audit trail columns
         updates.factor_source_name    = efData.sourceName || null;
         updates.factor_source_year    = efData.sourceYear || null;
         updates.factor_db_id          = efData.factorId   || null;
+        snapshotContext = { actVal, cat, unit, efData };
 
         if (efData.source === 'fallback') {
           console.warn(`[emissions PATCH] Using fallback factor for category: ${cat}`);
@@ -89,6 +97,15 @@ export async function PATCH(
     // Convert reporting_period to date if provided
     if (validated.reporting_period) {
       updates.reporting_period = new Date(`${validated.reporting_period}-01`).toISOString().split('T')[0];
+    }
+
+    if (validated.cost !== undefined || validated.currency !== undefined) {
+      const { cost, currency } = normalizeCostForStorage(
+        validated.cost ?? null,
+        validated.currency,
+      );
+      updates.cost = cost;
+      updates.currency = currency;
     }
 
     const service = createServiceClient();
@@ -102,6 +119,24 @@ export async function PATCH(
 
     if (error) throw error;
     if (!data) return NextResponse.json({ error: 'Записът не е намерен' }, { status: 404 });
+
+    if (snapshotContext?.efData) {
+      await writeCalculationSnapshot(service, {
+        companyId: userData.company_id,
+        emissionId: id,
+        scope: data.scope,
+        category: snapshotContext.cat,
+        locationId: data.location_id,
+        activityValue: snapshotContext.actVal,
+        activityUnit: snapshotContext.unit,
+        factor: snapshotContext.efData,
+        co2eTons: Number(data.calculated_co2e),
+        dataQuality: data.data_quality,
+        measurementMethod: data.measurement_method,
+        dataSource: data.data_source,
+        calculatedBy: user.id,
+      });
+    }
 
     return NextResponse.json({ data });
   } catch (err) {

@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 const deleteSchema = z.object({
   confirmation: z.literal('ИЗТРИЙ ДАННИТЕ МИ', {
-    errorMap: () => ({ message: 'Напишете точно: ИЗТРИЙ ДАННИТЕ МИ' }),
+    message: 'Напишете точно: ИЗТРИЙ ДАННИТЕ МИ',
   }),
   reason: z.string().max(500).optional().nullable(),
 });

@@ -311,6 +311,12 @@ export async function GET(req: NextRequest) {
 
     // Calculate summary
     const totalCo2eKg = emissions?.reduce((sum, e) => sum + parseFloat(e.co2e_kg.toString()), 0) || 0;
+
+    const uniqueCalculatedTransactions = new Set(
+      (emissions ?? [])
+        .filter((e) => e.source_type === 'transaction' && e.source_id)
+        .map((e) => e.source_id as string),
+    ).size;
     
     // Group by category
     const byCategory = emissions?.reduce((acc: any, e) => {
@@ -338,6 +344,7 @@ export async function GET(req: NextRequest) {
       total_co2e_kg: Math.round(totalCo2eKg * 100) / 100,
       total_co2e_tons: Math.round(totalCo2eKg / 1000 * 100) / 100,
       total_calculations: emissions?.length || 0,
+      unique_calculated_transactions: uniqueCalculatedTransactions,
       by_category: Object.values(byCategory),
       by_tier: Object.values(byTier),
       period: period || 'all',

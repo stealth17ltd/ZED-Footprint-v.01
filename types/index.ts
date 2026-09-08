@@ -13,6 +13,10 @@ export interface Company {
   sustainability_goals: string | null;
   eu_green_deal_commitment: boolean;
   baseline_year: number | null;
+  annual_turnover_eur?: number | null;
+  ets_has_installation?: boolean | null;
+  ets_thermal_input_mw?: number | null;
+  ets_activity_annex_i?: boolean | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;

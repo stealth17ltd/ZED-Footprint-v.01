@@ -1,23 +1,32 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState, useEffect } from 'react';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { bg } from '@/lib/i18n/bg';
 import { ZedLogo } from '@/components/ui/zed-logo';
 import Image from 'next/image';
+import { Loader2 } from 'lucide-react';
 
-export default function LoginPage() {
+function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
+
+  useEffect(() => {
+    if (searchParams.get('error') === 'auth_callback') {
+      toast.error(bg.auth.resetLinkInvalid);
+    }
+  }, [searchParams]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,13 +34,12 @@ export default function LoginPage() {
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: email.trim(),
         password,
       });
 
       if (error) throw error;
 
-      // Check user role to redirect appropriately
       const { data: userData } = await supabase
         .from('users')
         .select('role')
@@ -39,17 +47,16 @@ export default function LoginPage() {
         .single();
 
       toast.success('Успешен вход в системата');
-      
-      // Redirect admins to admin dashboard, clients to regular dashboard
+
       if (userData?.role === 'admin') {
         router.push('/admin');
       } else {
         router.push('/dashboard');
       }
       router.refresh();
-    } catch (error: any) {
-      console.error('Login error:', error);
-      toast.error(error.message || bg.auth.invalidCredentials);
+    } catch {
+      // Generic message — do not leak whether email exists
+      toast.error(bg.auth.invalidCredentials);
     } finally {
       setLoading(false);
     }
@@ -65,7 +72,7 @@ export default function LoginPage() {
             </div>
           </div>
           <CardDescription className="text-base mb-2">
-            Управление на корпоративната устойчивост
+            Отчитане на предприятията във връзка с устойчивостта
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -104,13 +111,12 @@ export default function LoginPage() {
               {loading ? bg.general.loading : bg.auth.login}
             </Button>
             <div className="text-center">
-              <button
-                type="button"
+              <Link
+                href="/forgot-password"
                 className="text-sm text-earth-400 hover:text-earth-300 underline"
-                onClick={() => toast.info('Функционалността ще бъде добавена скоро')}
               >
                 {bg.auth.forgotPassword}
-              </button>
+              </Link>
             </div>
             <div className="flex justify-center mt-6">
               <Image
@@ -125,5 +131,19 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-earth-50 to-earth-100">
+          <Loader2 className="h-8 w-8 animate-spin text-earth-300" />
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

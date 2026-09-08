@@ -1,5 +1,9 @@
 'use client';
 
+import EvidencePanel from '@/components/evidence/EvidencePanel';
+import CalculationPanel from '@/components/calculation/CalculationPanel';
+import { DEFAULT_CURRENCY, SUPPORTED_CURRENCIES } from '@/lib/constants/currency';
+
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,6 +29,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { MonthPicker } from '@/components/ui/month-picker';
 import Link from 'next/link';
+import { PageSkeleton } from '@/components/ui/page-skeleton';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 interface EmissionData {
@@ -132,7 +137,7 @@ function emissionToForm(e: EmissionData): EditForm {
     measurement_method: e.measurement_method ?? 'measured',
     data_quality:       e.data_quality ?? 'high',
     cost:               e.cost != null ? String(e.cost) : '',
-    currency:           e.currency ?? 'BGN',
+    currency:           e.currency ?? DEFAULT_CURRENCY,
     responsible_person: e.responsible_person ?? '',
   };
 }
@@ -270,11 +275,7 @@ export default function EmissionsListPage() {
 
   // ── Loading state ─────────────────────────────────────────────────────────
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="h-8 w-8 animate-spin text-earth-300" />
-      </div>
-    );
+    return <PageSkeleton statCards={3} />;
   }
 
   const currentCats = editForm?.scope === '1' ? SCOPE_1_CATEGORIES : SCOPE_2_CATEGORIES;
@@ -627,7 +628,7 @@ export default function EmissionsListPage() {
                       <DollarSign className="h-4 w-4 text-amber-600 mt-0.5" />
                       <div><p className="text-xs text-gray-500 mb-1">Финансови разходи</p>
                         <p className="text-lg font-bold text-amber-800">
-                          {selectedEmission.cost.toLocaleString('bg-BG', { minimumFractionDigits: 2 })} {selectedEmission.currency ?? 'BGN'}
+                          {selectedEmission.cost.toLocaleString('bg-BG', { minimumFractionDigits: 2 })} {selectedEmission.currency ?? DEFAULT_CURRENCY}
                         </p>
                       </div>
                     </div>
@@ -640,6 +641,10 @@ export default function EmissionsListPage() {
                     <p className="text-sm text-gray-700 whitespace-pre-wrap">{selectedEmission.notes}</p>
                   </div>
                 )}
+
+                <CalculationPanel emissionId={selectedEmission.id} />
+
+                <EvidencePanel emissionId={selectedEmission.id} />
 
                 <div className="flex justify-between items-center pt-2 border-t">
                   <p className="text-xs text-gray-400">Създадена: {new Date(selectedEmission.created_at).toLocaleString('bg-BG')}</p>
@@ -857,9 +862,9 @@ export default function EmissionsListPage() {
                     <Select value={editForm.currency} onValueChange={v => setEditForm(f => f ? { ...f, currency: v } : f)} disabled={saving}>
                       <SelectTrigger className="w-20"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="BGN">BGN</SelectItem>
-                        <SelectItem value="EUR">EUR</SelectItem>
-                        <SelectItem value="USD">USD</SelectItem>
+                        {SUPPORTED_CURRENCIES.map((c) => (
+                          <SelectItem key={c} value={c}>{c}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

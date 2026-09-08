@@ -1,5 +1,6 @@
 'use client';
 
+import { useTransition } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -11,9 +12,14 @@ interface YearSelectorProps {
 export default function YearSelector({ years, selectedYear }: YearSelectorProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const [isPending, startTransition] = useTransition();
 
   const navigate = (year: number) => {
-    router.push(`${pathname}?year=${year}`);
+    if (year === selectedYear) return;
+    startTransition(() => {
+      router.replace(`${pathname}?year=${year}`, { scroll: false });
+      router.refresh();
+    });
   };
 
   const currentIdx = years.indexOf(selectedYear);
@@ -21,11 +27,12 @@ export default function YearSelector({ years, selectedYear }: YearSelectorProps)
   const canGoOlder = currentIdx < years.length - 1;
 
   return (
-    <div className="flex items-center gap-1">
+    <div className={`flex items-center gap-1 ${isPending ? 'opacity-70' : ''}`}>
       {/* Prev (older) arrow */}
       <button
+        type="button"
         onClick={() => canGoOlder && navigate(years[currentIdx + 1])}
-        disabled={!canGoOlder}
+        disabled={!canGoOlder || isPending}
         className="h-7 w-7 flex items-center justify-center rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         title="По-стара година"
       >
@@ -37,7 +44,9 @@ export default function YearSelector({ years, selectedYear }: YearSelectorProps)
         {years.map((year) => (
           <button
             key={year}
+            type="button"
             onClick={() => navigate(year)}
+            disabled={isPending}
             className={[
               'h-7 px-3 rounded-md text-xs font-semibold transition-colors',
               year === selectedYear
@@ -52,8 +61,9 @@ export default function YearSelector({ years, selectedYear }: YearSelectorProps)
 
       {/* Next (newer) arrow */}
       <button
+        type="button"
         onClick={() => canGoNewer && navigate(years[currentIdx - 1])}
-        disabled={!canGoNewer}
+        disabled={!canGoNewer || isPending}
         className="h-7 w-7 flex items-center justify-center rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         title="По-нова година"
       >

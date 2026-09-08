@@ -1,5 +1,6 @@
 'use client';
 
+import { formatMoney } from '@/lib/constants/currency';
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -535,7 +536,7 @@ export default function StrategyDetailPage() {
           <div className="bg-purple-50 rounded-xl p-4">
             <p className="text-xs text-gray-500 mb-1">Прогнозна инвестиция</p>
             <p className="text-xl font-bold text-purple-600">
-              {strategy.estimated_cost != null ? `${strategy.estimated_cost.toLocaleString('bg-BG')} лв.` : '—'}
+              {strategy.estimated_cost != null ? formatMoney(strategy.estimated_cost) : '—'}
             </p>
           </div>
           <div className="bg-amber-50 rounded-xl p-4">
@@ -782,7 +783,7 @@ export default function StrategyDetailPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Прогнозна инвестиция (лв.)</Label>
+                <Label>Прогнозна инвестиция (EUR)</Label>
                 <Input
                   type="number" step="1" min="0"
                   value={strategyForm.estimated_cost}
@@ -911,7 +912,7 @@ export default function StrategyDetailPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Прогнозна цена (лв.)</Label>
+              <Label>Прогнозна цена (EUR)</Label>
               <Input
                 type="number" step="1" min="0"
                 value={initiativeForm.estimated_cost}

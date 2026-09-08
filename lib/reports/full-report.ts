@@ -1,5 +1,7 @@
 import { PDFDocument, rgb, PDFPage, PDFFont } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
+import { PDF_PLATFORM_NAME, pdfSafeText } from './pdf-text';
+import { drawPanel, drawAccentBar, fillRounded, drawRect, R } from './pdf-shapes';
 
 // ─────────────────────────────────────────────
 // Types
@@ -90,33 +92,21 @@ const C = {
   lightPurple: rgb(0.945, 0.906, 0.980),
   gray:        rgb(0.420, 0.420, 0.420),
   lightGray:   rgb(0.922, 0.922, 0.922),
-  darkGray:    rgb(0.220, 0.220, 0.220),
+  darkGray:    rgb(0.180, 0.180, 0.180),
   nearWhite:   rgb(0.976, 0.980, 0.984),
+  pageBg:      rgb(0.965, 0.969, 0.973),
   white:       rgb(1, 1, 1),
-  black:       rgb(0, 0, 0),
-  row1:        rgb(0.974, 0.978, 0.980),
+  black:       rgb(0.08, 0.08, 0.08),
+  row1:        rgb(0.985, 0.988, 0.990),
   row2:        rgb(1, 1, 1),
-  divider:     rgb(0.870, 0.875, 0.882),
+  divider:     rgb(0.780, 0.790, 0.800),
+  gold:        rgb(0.850, 0.680, 0.180),
+  goldLight:   rgb(0.960, 0.910, 0.720),
 };
 
 // ─────────────────────────────────────────────
 // Drawing helpers
 // ─────────────────────────────────────────────
-
-/** Top-down rect: y is the TOP of the rectangle */
-function drawRect(
-  page: PDFPage,
-  x: number, y: number, w: number, h: number,
-  color: ReturnType<typeof rgb>,
-  borderColor?: ReturnType<typeof rgb>
-) {
-  page.drawRectangle({
-    x, y: y - h, width: w, height: h,
-    color,
-    borderColor,
-    borderWidth: borderColor ? 0.5 : 0,
-  });
-}
 
 /** Draw text. y = baseline position (PDF y) */
 function drawText(
@@ -128,7 +118,7 @@ function drawText(
   color = C.black,
   maxWidth?: number
 ) {
-  const safeText = (text ?? '').toString();
+  const safeText = pdfSafeText((text ?? '').toString());
   if (!safeText) return;
   if (maxWidth) {
     let t = safeText;
@@ -142,6 +132,18 @@ function drawText(
 
 function drawLine(page: PDFPage, x1: number, y: number, x2: number, color = C.divider, thickness = 0.5) {
   page.drawLine({ start: { x: x1, y }, end: { x: x2, y }, thickness, color });
+}
+
+/** Decorative divider with diamond centre */
+function drawOrnamentDivider(page: PDFPage, x: number, y: number, w: number) {
+  const mid = x + w / 2;
+  drawLine(page, x, y, mid - 6, C.gold, 1);
+  drawLine(page, mid + 6, y, x + w, C.gold, 1);
+  page.drawRectangle({ x: mid - 2.5, y: y - 2.5, width: 5, height: 5, color: C.gold });
+}
+
+function drawPageBackground(page: PDFPage, width: number, height: number) {
+  drawRect(page, 0, height, width, height, C.pageBg);
 }
 
 /** Split text into lines that fit within maxWidth */
@@ -163,11 +165,6 @@ function wrapText(font: PDFFont, text: string, size: number, maxWidth: number): 
   return lines.length > 0 ? lines : [''];
 }
 
-/** Left-accent rule for section titles */
-function drawAccentBar(page: PDFPage, x: number, top: number, h: number, color: ReturnType<typeof rgb>) {
-  page.drawRectangle({ x, y: top - h, width: 3, height: h, color });
-}
-
 // ─────────────────────────────────────────────
 // Page management
 // ─────────────────────────────────────────────
@@ -187,19 +184,20 @@ interface PageCtx {
 function newPage(ctx: PageCtx): PageCtx {
   const page = ctx.pdfDoc.addPage([595, 842]);
   ctx.pageNum += 1;
+  drawPageBackground(page, 595, 842);
   drawFooter(page, ctx.font, ctx.pageNum);
   return { ...ctx, page, y: 842 - 56 };
 }
 
 function ensureSpace(ctx: PageCtx, needed: number): PageCtx {
-  if (ctx.y - needed < 60) return newPage(ctx);
+  if (ctx.y - needed < 72) return newPage(ctx);
   return ctx;
 }
 
 function drawFooter(page: PDFPage, font: PDFFont, pageNum: number) {
   const { width } = page.getSize();
   drawLine(page, 40, 44, width - 40, C.divider);
-  drawText(page, 'ZED Carbon Footprint Platform', 40, 30, 7.5, font, C.gray);
+  drawText(page, PDF_PLATFORM_NAME, 40, 30, 7, font, C.gray, width - 80);
   drawText(page, 'Поверително', width / 2 - 28, 30, 7.5, font, C.gray);
   drawText(page, `Страница ${pageNum}`, width - 75, 30, 7.5, font, C.gray);
 }
@@ -208,67 +206,62 @@ function drawFooter(page: PDFPage, font: PDFFont, pageNum: number) {
 // Section helpers
 // ─────────────────────────────────────────────
 
-/** Green bar section header with optional subtitle */
+/** Section header — dark band, white title */
 function sectionHeader(ctx: PageCtx, title: string, subtitle?: string): PageCtx {
-  const subtitleLines = subtitle ? wrapText(ctx.font, subtitle, 8, ctx.width - ctx.margin * 2 - 14) : [];
-  const boxH = subtitle ? 28 + subtitleLines.length * 12 : 28;
-  ctx = ensureSpace(ctx, boxH + 12);
+  const subtitleLines = subtitle ? wrapText(ctx.font, subtitle, 8, ctx.width - ctx.margin * 2 - 24) : [];
+  const boxH = subtitle ? 38 + subtitleLines.length * 12 : 34;
+  ctx = ensureSpace(ctx, boxH + 14);
   const { page, y, font, fontBold, width, margin } = ctx;
 
-  drawRect(page, margin, y, width - margin * 2, boxH, C.lightGreen);
-  drawAccentBar(page, margin, y, boxH, C.darkGreen);
+  drawPanel(page, margin, y, width - margin * 2, boxH, C.darkGreen, C.medGreen, 1, R.md);
+  drawAccentBar(page, margin, y, boxH, C.gold);
 
-  drawText(page, title, margin + 10, y - 14, 11, fontBold, C.darkGreen);
+  drawText(page, title, margin + 14, y - 15, 11, fontBold, C.white);
   subtitleLines.forEach((line, i) => {
-    drawText(page, line, margin + 10, y - 27 - i * 12, 8, font, C.gray);
+    drawText(page, line, margin + 14, y - 29 - i * 12, 8, font, C.goldLight);
   });
 
-  return { ...ctx, y: y - boxH - 10 };
+  return { ...ctx, y: y - boxH - 12 };
 }
 
-/** Full-width band for page titles */
+/** Full-width title band */
 function pageTitleBand(ctx: PageCtx, title: string, color: ReturnType<typeof rgb>): PageCtx {
   const { page, width } = ctx;
-  const bandH = 36;
-  const bandTop = ctx.y + 10;
-  drawRect(page, 0, bandTop, width, bandH, color);
-  // white left accent
-  page.drawRectangle({ x: 0, y: bandTop - bandH, width: 5, height: bandH, color: C.white, opacity: 0.4 });
-  // text baseline = bandTop - 22 (centred in 36px band)
-  drawText(page, title, 44, bandTop - 23, 13, ctx.fontBold, C.white);
-  return { ...ctx, y: ctx.y - bandH };
+  const bandH = 40;
+  const bandTop = ctx.y + 8;
+  const bandW = width - marginBand(ctx) * 2;
+  drawPanel(page, marginBand(ctx), bandTop, bandW, bandH, color, C.medGreen, 1, R.lg);
+  drawAccentBar(page, marginBand(ctx), bandTop, bandH, C.gold);
+  drawText(page, title, marginBand(ctx) + 14, bandTop - 24, 13, ctx.fontBold, C.white, width - marginBand(ctx) * 2 - 28);
+  return { ...ctx, y: ctx.y - bandH - 4 };
 }
+
+function marginBand(ctx: PageCtx) { return ctx.margin - 4; }
 
 /** KPI cards row */
 function kpiRow(
   ctx: PageCtx,
   items: Array<{ label: string; value: string; unit?: string; color?: ReturnType<typeof rgb>; bg?: ReturnType<typeof rgb> }>
 ): PageCtx {
-  const cardH = 56;
-  ctx = ensureSpace(ctx, cardH + 8);
+  const cardH = 62;
+  ctx = ensureSpace(ctx, cardH + 12);
   const { page, y, font, fontBold, width, margin } = ctx;
-  const gap = 6;
+  const gap = 8;
   const n = items.length;
   const colW = (width - margin * 2 - gap * (n - 1)) / n;
 
   items.forEach((item, i) => {
     const cx = margin + i * (colW + gap);
-    const bg = item.bg || C.nearWhite;
     const col = item.color || C.darkGray;
 
-    drawRect(page, cx, y, colW, cardH, bg, C.divider);
-    // colored left border
-    page.drawRectangle({ x: cx, y: y - cardH, width: 3, height: cardH, color: col });
+    drawPanel(page, cx, y, colW, cardH, C.white, col, 1, R.md, 4);
 
-    // label — 10px below top
-    drawText(page, item.label, cx + 9, y - 11, 7.5, font, C.gray, colW - 12);
-    // value — 28px below top (size 16)
-    drawText(page, item.value, cx + 9, y - 30, 16, fontBold, col, colW - 12);
-    // unit — 44px below top
-    if (item.unit) drawText(page, item.unit, cx + 9, y - 44, 7.5, font, C.gray, colW - 12);
+    drawText(page, item.label, cx + 12, y - 16, 7.5, fontBold, C.darkGray, colW - 16);
+    drawText(page, item.value, cx + 12, y - 36, 16, fontBold, col, colW - 16);
+    if (item.unit) drawText(page, item.unit, cx + 12, y - 52, 7.5, font, C.gray, colW - 16);
   });
 
-  return { ...ctx, y: y - cardH - 10 };
+  return { ...ctx, y: y - cardH - 12 };
 }
 
 /** Notes bullet list — wraps long text with hanging indent */
@@ -306,8 +299,7 @@ function tableScope12(ctx: PageCtx, rows: Scope12Emission[]): PageCtx {
   const rowH = 18;
 
   ctx = ensureSpace(ctx, rowH * 2);
-  // Header
-  drawRect(ctx.page, margin, ctx.y, totalW, rowH, C.darkGray);
+  drawPanel(ctx.page, margin, ctx.y, totalW, rowH, C.darkGreen, C.darkGreen, 0, R.sm);
   let hx = margin;
   cols.forEach(c => {
     drawText(ctx.page, c.label, hx + 4, ctx.y - 12, 8, ctx.fontBold, C.white, c.w - 6);
@@ -317,7 +309,7 @@ function tableScope12(ctx: PageCtx, rows: Scope12Emission[]): PageCtx {
 
   rows.forEach((row, i) => {
     ctx = ensureSpace(ctx, rowH);
-    const bg = i % 2 === 0 ? C.row1 : C.row2;
+    const bg = i % 2 === 0 ? C.row1 : C.white;
     drawRect(ctx.page, margin, ctx.y, totalW, rowH, bg);
     let rx = margin;
     const period = (() => { try { return new Date(row.reporting_period).toLocaleDateString('bg-BG', { month: 'short', year: 'numeric' }); } catch { return row.reporting_period; } })();
@@ -355,7 +347,7 @@ function tableScope3Categories(ctx: PageCtx, byCategory: Record<number, number>)
   const headers = ['Категория', 'tCO2e', 'Дял %', 'Метод'];
 
   // Header
-  drawRect(ctx.page, margin, ctx.y, totalW, rowH, C.darkGray);
+  drawPanel(ctx.page, margin, ctx.y, totalW, rowH, C.darkGreen, C.darkGreen, 0, R.sm);
   let hx = margin;
   headers.forEach((h, i) => {
     drawText(ctx.page, h, hx + 5, ctx.y - 13, 8, ctx.fontBold, C.white);
@@ -379,7 +371,7 @@ function tableScope3Categories(ctx: PageCtx, byCategory: Record<number, number>)
 
   // Total row
   ctx = ensureSpace(ctx, rowH);
-  drawRect(ctx.page, margin, ctx.y, totalW, rowH, C.lightGreen, C.medGreen);
+  drawPanel(ctx.page, margin, ctx.y, totalW, rowH, C.lightGreen, C.medGreen, 1, R.sm);
   let rx = margin;
   [['ОБЩО', colW[0]], [totalTons.toFixed(4), colW[1]], ['100%', colW[2]], ['', colW[3]]].forEach(([v, w]) => {
     drawText(ctx.page, v as string, rx + 5, ctx.y - 13, 8.5, ctx.fontBold, C.darkGreen, (w as number) - 8);
@@ -403,7 +395,7 @@ function tableScope3Calculations(ctx: PageCtx, calcs: Scope3Calculation[]): Page
   const headers = ['Доставчик', 'Описание', 'Сума EUR', 'Категория', 'kg CO2e', 'Метод'];
 
   ctx = ensureSpace(ctx, rowH * 2);
-  drawRect(ctx.page, margin, ctx.y, totalW, rowH, C.darkGray);
+  drawPanel(ctx.page, margin, ctx.y, totalW, rowH, C.darkGreen, C.darkGreen, 0, R.sm);
   let hx = margin;
   headers.forEach((h, i) => {
     drawText(ctx.page, h, hx + 5, ctx.y - 13, 8, ctx.fontBold, C.white);
@@ -418,9 +410,11 @@ function tableScope3Calculations(ctx: PageCtx, calcs: Scope3Calculation[]): Page
     drawRect(ctx.page, margin, ctx.y, totalW, rowH, bg);
     let rx = margin;
     [
-      trace.supplier || '\u2014',
-      trace.description || '\u2014',
-      trace.amount != null ? trace.amount.toFixed(2) : '\u2014',
+      trace.supplier != null ? String(trace.supplier) : '\u2014',
+      trace.description != null ? String(trace.description) : '\u2014',
+      trace.amount != null && !Number.isNaN(Number(trace.amount))
+        ? Number(trace.amount).toFixed(2)
+        : '\u2014',
       SCOPE3_CATEGORY_LABELS[calc.scope_category]?.replace('Кат. ', 'К.') || `К.${calc.scope_category}`,
       (calc.co2e_kg ?? 0).toFixed(3),
       calc.method_tier ? `Ниво ${calc.method_tier}` : '\u2014',
@@ -596,14 +590,14 @@ function renderRecommendations(ctx: PageCtx, recs: Recommendation[]): PageCtx {
     const { page, y } = ctx;
 
     // Card background + left stripe
-    drawRect(page, margin, y, width - margin * 2, cardH, bg, C.divider);
-    page.drawRectangle({ x: margin, y: y - cardH, width: 4, height: cardH, color: col });
+    drawPanel(page, margin, y, width - margin * 2, cardH, bg, col, 1, R.md);
+    drawAccentBar(page, margin, y, cardH, col);
 
     // Row 1: badge + number + title
     const rowY = y - 16;
-    const badgeW = 44;
-    drawRect(page, margin + 8, y - 6, badgeW, 14, col);
-    drawText(page, rec.priority.toUpperCase(), margin + 10, rowY, 6.5, fontBold, C.white);
+    const badgeW = 46;
+    fillRounded(page, margin + 10, y - 5, badgeW, 14, R.sm, col);
+    drawText(page, rec.priority.toUpperCase(), margin + 14, rowY, 6.5, fontBold, C.white);
     drawText(page, `${idx + 1}.`, margin + 58, rowY, 8, fontBold, col);
     titleLines.forEach((tl, ti) => {
       drawText(page, tl, margin + 68, rowY - ti * lH, 9, fontBold, col, titleMaxW);
@@ -661,91 +655,86 @@ export async function generateFullReport(data: FullReportData): Promise<Buffer> 
   // PAGE 1 — Cover
   // ══════════════════════════════════════════════
   let page = pdfDoc.addPage([W, H]);
+  drawPageBackground(page, W, H);
   let ctx: PageCtx = { pdfDoc, font, fontBold, page, y: H - 56, pageNum: 1, width: W, height: H, margin: 40 };
   drawFooter(page, font, 1);
 
-  // ── Dark green header band ─────────────────────
+  // ── Cover header band (full width, solid dark green) ─────────────────────
   const HEADER_H = 200;
   drawRect(page, 0, H, W, HEADER_H, C.darkGreen);
+  drawRect(page, 0, H, 8, HEADER_H, C.gold);
+  drawRect(page, 0, H - HEADER_H, W, H - HEADER_H, C.pageBg);
 
-  // Decorative accent stripe
-  drawRect(page, 0, H, 6, HEADER_H, C.medGreen);
+  drawText(page, 'Софтуер за отчитане на', 48, H - 48, 8.5, font, C.goldLight);
+  drawText(page, 'предприятията във връзка с устойчивостта', 48, H - 60, 8.5, font, C.goldLight, W - 96);
 
-  // Logo
-  drawText(page, 'ZED', 44, H - 46, 30, fontBold, C.white);
-  drawText(page, 'Carbon Footprint Platform', 108, H - 46, 11, font, rgb(0.65, 0.88, 0.68));
+  drawText(page, 'ПЪЛЕН ОТЧЕТ', 48, H - 92, 28, fontBold, C.white);
+  drawText(page, 'НА УСТОЙЧИВОСТТА', 48, H - 122, 22, fontBold, C.gold);
+  drawText(page, `Обхват 1 + 2 + 3  ·  Отчетна година ${data.reportingYear} г.`, 48, H - 142, 10, font, C.goldLight);
 
-  // Title
-  drawText(page, 'ОТЧЕТ ЗА', 44, H - 96, 30, fontBold, C.white);
-  drawText(page, 'ВЪГЛЕРОДЕН ОТПЕЧАТЪК', 44, H - 130, 24, fontBold, C.white);
-  drawText(page, `Обхват 1 + 2 + 3  |  Отчетна година: ${data.reportingYear} г.`, 44, H - 154, 10, font, rgb(0.65, 0.88, 0.68));
+  drawOrnamentDivider(page, 48, H - 156, W - 96);
 
   // ── Company info box ───────────────────────────
-  const compBoxTop = H - HEADER_H - 10;
-  const compBoxH = 68;
-  drawRect(page, 40, compBoxTop, W - 80, compBoxH, C.white, C.divider);
-  drawAccentBar(page, 40, compBoxTop, compBoxH, C.darkGreen);
+  const compBoxTop = H - HEADER_H - 24;
+  const compBoxH = 72;
+  drawPanel(page, 36, compBoxTop, W - 72, compBoxH, C.white, C.darkGreen, 1, R.lg);
+  drawAccentBar(page, 46, compBoxTop - 8, compBoxH - 16, C.darkGreen);
 
-  drawText(page, data.company.company_name, 52, compBoxTop - 18, 15, fontBold, C.darkGreen, W - 100);
-  const infoY = compBoxTop - 34;
+  drawText(page, data.company.company_name, 58, compBoxTop - 20, 16, fontBold, C.darkGreen, W - 116);
+  const infoY = compBoxTop - 38;
   const infoParts: string[] = [];
   if (data.company.registration_number) infoParts.push(`ЕИК: ${data.company.registration_number}`);
   if (data.company.industry_sector) infoParts.push(`Сектор: ${data.company.industry_sector}`);
   if (data.company.employee_count) infoParts.push(`Служители: ${data.company.employee_count}`);
-  drawText(page, infoParts.join('   |   '), 52, infoY, 8.5, font, C.gray, W - 96);
-  if (data.company.address) drawText(page, data.company.address, 52, infoY - 14, 8, font, C.gray, W - 96);
+  drawText(page, infoParts.join('   ·   '), 58, infoY, 8.5, font, C.darkGray, W - 112);
+  if (data.company.address) drawText(page, data.company.address, 58, infoY - 14, 8, font, C.gray, W - 112);
 
   // ── Grand total banner ─────────────────────────
   const bannerTop = compBoxTop - compBoxH - 16;
-  const bannerH = 78;
-  drawRect(page, 40, bannerTop, W - 80, bannerH, C.lightGreen, C.medGreen);
-  drawAccentBar(page, 40, bannerTop, bannerH, C.darkGreen);
+  const bannerH = 84;
+  drawPanel(page, 36, bannerTop, W - 72, bannerH, C.lightGreen, C.medGreen, 1, R.lg);
+  drawAccentBar(page, 46, bannerTop - 8, bannerH - 16, C.darkGreen);
 
-  drawText(page, 'ОБЩ ВЪГЛЕРОДЕН ОТПЕЧАТЪК', 52, bannerTop - 12, 8.5, font, C.gray);
-  drawText(page, grandTotal.toFixed(3), 52, bannerTop - 44, 32, fontBold, C.darkGreen);
-  drawText(page, 'tCO2e', 52 + font.widthOfTextAtSize(grandTotal.toFixed(3), 32) + 6, bannerTop - 44, 13, font, C.green);
-  drawText(page, `Отчетна година: ${data.reportingYear} г.   Генериран: ${today}`, 52, bannerTop - 62, 8, font, C.gray);
+  drawText(page, 'ОБЩ ВЪГЛЕРОДЕН ОТПЕЧАТЪК', 58, bannerTop - 14, 8.5, fontBold, C.darkGray);
+  drawText(page, grandTotal.toFixed(3), 58, bannerTop - 46, 34, fontBold, C.darkGreen);
+  drawText(page, 'tCO2e', 58 + font.widthOfTextAtSize(grandTotal.toFixed(3), 34) + 8, bannerTop - 46, 13, font, C.green);
+  drawText(page, `Отчетна година: ${data.reportingYear} г.   ·   Генериран: ${today}`, 58, bannerTop - 66, 8, font, C.darkGray);
 
   // ── Scope breakdown cards ──────────────────────
   const cardAreaTop = bannerTop - bannerH - 16;
-  const cardH = 90;
-  const gap = 8;
-  const cardW = (W - 80 - gap * 2) / 3;
+  const cardH = 96;
+  const gap = 10;
+  const cardW = (W - 72 - gap * 2) / 3;
   const scopeCards = [
-    { label: 'Обхват 1', sub: 'Директни емисии', val: scope1Total, bg: C.lightGreen, col: C.darkGreen, border: C.medGreen },
-    { label: 'Обхват 2', sub: 'Закупена енергия', val: scope2Total, bg: C.lightBlue, col: C.blue, border: C.blue },
-    { label: 'Обхват 3', sub: 'Верига на стойността', val: scope3TotalTons, bg: C.lightOrange, col: C.orange, border: C.orange },
+    { label: 'Обхват 1', sub: 'Директни емисии', val: scope1Total, col: C.darkGreen, border: C.medGreen },
+    { label: 'Обхват 2', sub: 'Закупена енергия', val: scope2Total, col: C.blue, border: C.blue },
+    { label: 'Обхват 3', sub: 'Верига на стойността', val: scope3TotalTons, col: C.orange, border: C.orange },
   ];
 
-  scopeCards.forEach(({ label, sub, val, bg, col, border }, i) => {
-    const cx = 40 + i * (cardW + gap);
-    // Card background
-    drawRect(page, cx, cardAreaTop, cardW, cardH, bg, border);
-    // Top colored stripe
-    drawRect(page, cx, cardAreaTop, cardW, 5, border);
+  scopeCards.forEach(({ label, sub, val, col, border }, i) => {
+    const cx = 36 + i * (cardW + gap);
+    drawPanel(page, cx, cardAreaTop, cardW, cardH, C.white, border, 1, R.md, 5);
 
-    // Content — all positions relative to cardAreaTop
-    drawText(page, label, cx + 10, cardAreaTop - 16, 10, fontBold, col, cardW - 14);
-    drawText(page, sub, cx + 10, cardAreaTop - 28, 7.5, font, C.gray, cardW - 14);
-    drawText(page, val.toFixed(3), cx + 10, cardAreaTop - 54, 20, fontBold, col, cardW - 14);
-    drawText(page, 'tCO2e', cx + 10, cardAreaTop - 68, 8, font, C.gray);
+    drawText(page, label, cx + 12, cardAreaTop - 18, 10, fontBold, col, cardW - 16);
+    drawText(page, sub, cx + 12, cardAreaTop - 30, 7.5, font, C.darkGray, cardW - 16);
+    drawText(page, val.toFixed(3), cx + 12, cardAreaTop - 56, 20, fontBold, col, cardW - 16);
+    drawText(page, 'tCO2e', cx + 12, cardAreaTop - 70, 8, font, C.gray);
     const pct = grandTotal > 0 ? ((val / grandTotal) * 100).toFixed(1) : '0';
-    drawText(page, `${pct}% от общото`, cx + 10, cardAreaTop - 82, 8, font, col);
-    // cardAreaTop - 82 is 8px above box bottom (cardAreaTop - cardH = cardAreaTop - 90)
+    drawText(page, `${pct}% от общото`, cx + 12, cardAreaTop - 86, 8, fontBold, col);
   });
 
   // ── Methodology note ───────────────────────────
   const methTop = cardAreaTop - cardH - 14;
-  const methH = 52;
-  drawRect(page, 40, methTop, W - 80, methH, C.nearWhite, C.divider);
-  drawText(page, 'МЕТОДОЛОГИЯ', 52, methTop - 10, 7.5, fontBold, C.gray);
-  drawText(page, 'Обхват 1 & 2: Изчислено по емисионни фактори (DEFRA, IPCC, MOEW Bulgaria)', 52, methTop - 23, 7.5, font, C.darkGray);
-  drawText(page, 'Обхват 3: Разходно-базиран метод (EXIOBASE v3, DEFRA 2024) — Ниво C (EEIO)', 52, methTop - 35, 7.5, font, C.darkGray);
-  drawText(page, 'GHG Protocol Corporate Standard, ISO 14064-1', 52, methTop - 47, 7.5, font, C.darkGray);
+  const methH = 56;
+  drawPanel(page, 36, methTop, W - 72, methH, C.white, C.divider, 1, R.md);
+  drawText(page, 'МЕТОДОЛОГИЯ', 50, methTop - 12, 7.5, fontBold, C.darkGreen);
+  drawText(page, 'Обхват 1 & 2: емисионни фактори (DEFRA, IPCC, MOEW Bulgaria)', 50, methTop - 26, 7.5, font, C.darkGray);
+  drawText(page, 'Обхват 3: разходно-базиран метод (EXIOBASE v3, DEFRA 2024) — Ниво C (EEIO)', 50, methTop - 38, 7.5, font, C.darkGray);
+  drawText(page, 'GHG Protocol Corporate Standard · ISO 14064-1', 50, methTop - 50, 7.5, font, C.darkGray);
 
   // ── Disclaimer ─────────────────────────────────
   drawLine(page, 40, 58, W - 40, C.divider);
-  drawText(page, 'Настоящият отчет е изготвен на базата на предоставени данни. ZED не носи отговорност за точността на входните данни.', 40, 44, 7, font, C.gray, W - 80);
+  drawText(page, `Настоящият отчет е изготвен на базата на предоставени данни. ${PDF_PLATFORM_NAME} не носи отговорност за точността на входните данни.`, 40, 44, 7, font, C.gray, W - 80);
 
   // ══════════════════════════════════════════════
   // PAGE 2 — Scope 1 & 2 Detail
@@ -829,7 +818,7 @@ export async function generateFullReport(data: FullReportData): Promise<Buffer> 
     'Обхват 3, Кат. 4 (Транспорт нагоре) и Кат. 5 (Отпадъци): DEFRA 2024 / EXIOBASE v3.',
     'Ниво C означава, че се прилага разходно-базиран метод с индустриални средни стойности.',
     'Препоръчително е преминаване към Ниво B (физически данни) за категориите с най-висок дял.',
-    `Отчетна година: ${data.reportingYear} г.  |  Изготвил: ${data.generatedBy || 'ZED Platform'}  |  Дата: ${today}`,
+    `Отчетна година: ${data.reportingYear} г.  |  Изготвил: ${data.generatedBy || PDF_PLATFORM_NAME}  |  Дата: ${today}`,
   ]);
   ctx.y -= 16;
 
@@ -851,7 +840,7 @@ export async function generateFullReport(data: FullReportData): Promise<Buffer> 
 
   // Intro text
   ctx = ensureSpace(ctx, 40);
-  drawRect(ctx.page, ctx.margin, ctx.y, W - ctx.margin * 2, 34, C.nearWhite, C.divider);
+  drawPanel(ctx.page, ctx.margin, ctx.y, W - ctx.margin * 2, 34, C.white, C.divider, 1, R.md);
   drawText(ctx.page, `Базирани на данните от ${data.reportingYear} г. (общо ${grandTotal.toFixed(3)} tCO2e), следните действия имат най-висок потенциал за намаляване`, ctx.margin + 10, ctx.y - 12, 8, font, C.darkGray, W - ctx.margin * 2 - 14);
   drawText(ctx.page, `на въглеродния отпечатък на ${data.company.company_name}. Препоръките са наредени по значимост.`, ctx.margin + 10, ctx.y - 25, 8, font, C.darkGray, W - ctx.margin * 2 - 14);
   ctx.y -= 44;
@@ -860,7 +849,7 @@ export async function generateFullReport(data: FullReportData): Promise<Buffer> 
   ctx = ensureSpace(ctx, 18);
   ['висок', 'среден', 'нисък'].forEach((p, pi) => {
     const lx = ctx.margin + pi * 130;
-    drawRect(ctx.page, lx, ctx.y, 10, 10, PRIORITY_COLORS[p] || C.gray);
+    fillRounded(ctx.page, lx, ctx.y, 10, 10, 2.5, PRIORITY_COLORS[p] || C.gray);
     drawText(ctx.page, `Приоритет: ${p}`, lx + 13, ctx.y - 8, 7.5, font, C.darkGray);
   });
   ctx.y -= 20;
@@ -871,11 +860,11 @@ export async function generateFullReport(data: FullReportData): Promise<Buffer> 
   // ── Closing note ────────────────────────────────
   ctx = ensureSpace(ctx, 50);
   ctx.y -= 10;
-  drawRect(ctx.page, ctx.margin, ctx.y, W - ctx.margin * 2, 42, C.lightGreen, C.medGreen);
+  drawPanel(ctx.page, ctx.margin, ctx.y, W - ctx.margin * 2, 42, C.lightGreen, C.medGreen, 1, R.md);
   drawAccentBar(ctx.page, ctx.margin, ctx.y, 42, C.darkGreen);
   drawText(ctx.page, 'Следващи стъпки', ctx.margin + 10, ctx.y - 14, 9, fontBold, C.darkGreen);
   drawText(ctx.page, `Споделете този отчет с вашия екип и ключови доставчици. Задайте измерими цели и проследявайте напредъка`, ctx.margin + 10, ctx.y - 27, 8, font, C.darkGray, W - ctx.margin * 2 - 14);
-  drawText(ctx.page, `чрез ежемесечно обновяване на данните в ZED Carbon Footprint Platform.`, ctx.margin + 10, ctx.y - 39, 8, font, C.darkGray, W - ctx.margin * 2 - 14);
+  drawText(ctx.page, `чрез редовно обновяване на данните за емисии и доказателства.`, ctx.margin + 10, ctx.y - 39, 8, font, C.darkGray, W - ctx.margin * 2 - 14);
 
   const pdfBytes = await pdfDoc.save();
   return Buffer.from(pdfBytes);

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { getCompanyFootprint } from '@/lib/carbon/footprint-service';
 
 /**
  * GET /api/audit/export?year=2025
@@ -56,9 +57,9 @@ export async function GET(request: Request) {
       `)
       .eq('company_id', userData.company_id)
       .eq('scope', 3)
-      .gte('calculated_at', start)
-      .lte('calculated_at', end)
-      .order('calculated_at', { ascending: true });
+      .gte('reporting_period', start)
+      .lte('reporting_period', end)
+      .order('reporting_period', { ascending: true });
     if (s3Err) throw s3Err;
 
     // Fetch related transaction data for Scope 3
@@ -184,16 +185,14 @@ export async function GET(request: Request) {
       ].map(csvEscape).join(','));
     }
 
-    // Totals block
-    const totalScope1 = (ed ?? []).filter(r => r.scope === 1).reduce((s, r) => s + (r.calculated_co2e ?? 0), 0);
-    const totalScope2 = (ed ?? []).filter(r => r.scope === 2).reduce((s, r) => s + (r.calculated_co2e ?? 0), 0);
-    const totalScope3 = (s3calc ?? []).reduce((s, r) => s + (r.co2e_kg ?? 0), 0) / 1000;
+    // Totals block (canonical FootprintService)
+    const footprint = await getCompanyFootprint(supabase, userData.company_id, year);
     rows.push(``);
     rows.push(`# ОБОБЩЕНИЕ`);
-    rows.push(`# Обхват 1: ${totalScope1.toFixed(4)} tCO2e`);
-    rows.push(`# Обхват 2: ${totalScope2.toFixed(4)} tCO2e`);
-    rows.push(`# Обхват 3: ${totalScope3.toFixed(4)} tCO2e`);
-    rows.push(`# ОБЩО: ${(totalScope1 + totalScope2 + totalScope3).toFixed(4)} tCO2e`);
+    rows.push(`# Обхват 1: ${footprint.scope1.toFixed(4)} tCO2e`);
+    rows.push(`# Обхват 2: ${footprint.scope2.toFixed(4)} tCO2e`);
+    rows.push(`# Обхват 3: ${footprint.scope3.toFixed(4)} tCO2e`);
+    rows.push(`# ОБЩО: ${footprint.total.toFixed(4)} tCO2e`);
 
     const csv = rows.join('\r\n');
     const safeCompany = (company?.company_name ?? 'company')

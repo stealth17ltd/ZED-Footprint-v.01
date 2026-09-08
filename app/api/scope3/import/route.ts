@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { DEFAULT_CURRENCY, FX_TO_EUR, convertToEUR } from '@/lib/constants/currency';
 
 // Validation schema for transaction import
 const transactionSchema = z.object({
@@ -8,7 +9,7 @@ const transactionSchema = z.object({
   supplier: z.string().min(1, 'Supplier is required'),
   description: z.string().optional(),
   amount: z.number().positive('Amount must be positive'),
-  currency: z.string().min(3).max(3, 'Currency must be 3 letters (e.g., BGN, EUR, USD)'),
+  currency: z.string().min(3).max(3, 'Currency must be 3 letters (e.g., EUR, USD)'),
   expense_category: z.string().optional(),
   account_code: z.string().optional(),
   invoice_number: z.string().optional(),
@@ -96,18 +97,9 @@ export async function POST(request: Request) {
           ? new Date(validated.txn_date) 
           : validated.txn_date;
 
-        // Currency conversion to EUR (base currency)
-        // In production, integrate with ECB API or similar for real-time rates
-        const fxRates: Record<string, number> = {
-          'EUR': 1.0,
-          'USD': 1.08,    // USD to EUR (approximate)
-          'GBP': 1.17,    // GBP to EUR (approximate)
-          'CHF': 0.95,    // CHF to EUR (approximate)
-        };
-
-        const baseCurrency = 'EUR';
-        const fxRate = fxRates[validated.currency] || 1.0;
-        const amountBaseCurrency = validated.amount * fxRate;
+        const baseCurrency = DEFAULT_CURRENCY;
+        const fxRate = FX_TO_EUR[validated.currency] ?? FX_TO_EUR.EUR;
+        const amountBaseCurrency = convertToEUR(validated.amount, validated.currency);
 
         validTransactions.push({
           company_id: user.company_id,
@@ -133,7 +125,7 @@ export async function POST(request: Request) {
         if (error instanceof z.ZodError) {
           errors.push({
             row: i + 1,
-            errors: error.errors.map((e) => `${e.path.join('.')}: ${e.message}`),
+            errors: error.issues.map((e) => `${e.path.join('.')}: ${e.message}`),
           });
         } else {
           errors.push({

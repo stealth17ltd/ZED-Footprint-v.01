@@ -14,6 +14,7 @@ import {
   CheckCircle, BarChart3, PieChart as PieChartIcon, Building2,
   ArrowRight, RefreshCw, Loader2, Star, FileText, Upload
 } from 'lucide-react';
+import { PageSkeleton } from '@/components/ui/page-skeleton';
 
 // Category colors
 const CATEGORY_COLORS: Record<number, string> = {
@@ -126,14 +127,7 @@ export default function Scope3DashboardPage() {
   };
 
   if (loading) {
-    return (
-      <div className="p-8 flex items-center justify-center min-h-[60vh]">
-        <div className="text-center">
-          <Loader2 className="h-10 w-10 animate-spin text-green-600 mx-auto mb-4" />
-          <p className="text-gray-500">Зареждане на данни...</p>
-        </div>
-      </div>
-    );
+    return <PageSkeleton statCards={4} />;
   }
 
   const hasEmissions = data && data.summary.total_co2e_tons > 0;

@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
+import { DEFAULT_CURRENCY, currencySchema, normalizeCostForStorage } from '@/lib/constants/currency';
 import { createClient } from '@/lib/supabase/server';
 import { createServiceClient } from '@/lib/supabase/service';
 import { z } from 'zod';
 import { lookupEmissionFactor } from '@/lib/emission-factors-lookup';
+import { writeCalculationSnapshot } from '@/lib/carbon/calculation-snapshot';
 
 const createEmissionSchema = z.object({
   scope: z.number().int().min(1).max(2),
@@ -20,7 +22,7 @@ const createEmissionSchema = z.object({
   measurement_method: z.enum(['measured', 'calculated', 'estimated']).optional(),
   data_quality: z.enum(['high', 'medium', 'low']).optional(),
   cost: z.string().optional(),
-  currency: z.enum(['BGN', 'EUR', 'USD']).optional(),
+  currency: currencySchema.optional(),
   responsible_person: z.string().optional(),
 });
 
@@ -107,8 +109,10 @@ export async function POST(request: Request) {
         invoice_number: validatedData.invoice_number || null,
         measurement_method: validatedData.measurement_method || 'measured',
         data_quality: validatedData.data_quality || 'high',
-        cost: validatedData.cost ? parseFloat(validatedData.cost) : null,
-        currency: validatedData.currency || 'BGN',
+        ...normalizeCostForStorage(
+          validatedData.cost ? parseFloat(validatedData.cost) : null,
+          validatedData.currency,
+        ),
         responsible_person:  validatedData.responsible_person || null,
         // Factor audit trail
         factor_source_name: emissionFactorData.sourceName  || null,
@@ -123,6 +127,22 @@ export async function POST(request: Request) {
       throw insertError;
     }
 
+    await writeCalculationSnapshot(serviceSupabase, {
+      companyId: userData.company_id,
+      emissionId: emissionData.id,
+      scope: validatedData.scope,
+      category: validatedData.category,
+      locationId: validatedData.location_id,
+      activityValue: validatedData.activity_value,
+      activityUnit: validatedData.unit,
+      factor: emissionFactorData,
+      co2eTons: calculatedCO2e_tons,
+      dataQuality: validatedData.data_quality,
+      measurementMethod: validatedData.measurement_method,
+      dataSource: 'manual',
+      calculatedBy: user.id,
+    });
+
     return NextResponse.json({
       data: emissionData,
       calculation: {
@@ -131,8 +151,8 @@ export async function POST(request: Request) {
         emission_factor:    factor,
         gwp,
         effective_factor:   effectiveFactor,
-        calculated_co2e_kg,
-        calculated_co2e_tons,
+        calculated_co2e_kg:   calculatedCO2e_kg,
+        calculated_co2e_tons: calculatedCO2e_tons,
         factor_source:      factorSource,
         factor_id:          emissionFactorData.factorId,
         factor_source_name: emissionFactorData.sourceName,
@@ -144,7 +164,7 @@ export async function POST(request: Request) {
     
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: 'Грешка при валидация', details: error.errors },
+        { error: 'Грешка при валидация', details: error.issues },
         { status: 400 }
       );
     }
