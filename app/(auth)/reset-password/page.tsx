@@ -20,7 +20,6 @@ export default function ResetPasswordPage() {
   const [checkingSession, setCheckingSession] = useState(true);
   const [hasSession, setHasSession] = useState(false);
   const router = useRouter();
-  const supabase = createClient();
 
   useEffect(() => {
     createClient().auth.getUser().then(({ data: { user } }) => {
@@ -43,6 +42,7 @@ export default function ResetPasswordPage() {
 
     setLoading(true);
     try {
+      const supabase = createClient();
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
 

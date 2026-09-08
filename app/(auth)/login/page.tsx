@@ -20,7 +20,6 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const supabase = createClient();
 
   useEffect(() => {
     if (searchParams.get('error') === 'auth_callback') {
@@ -33,6 +32,7 @@ function LoginForm() {
     setLoading(true);
 
     try {
+      const supabase = createClient();
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
