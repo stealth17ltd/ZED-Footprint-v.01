@@ -10,6 +10,7 @@ import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer, ReferenceLine, Cell,
 } from 'recharts';
+import { toast } from 'sonner';
 import type { ComparisonResult } from '@/app/api/comparison/route';
 
 // ── Delta badge ────────────────────────────────────────────────────────────
@@ -37,16 +38,17 @@ function DeltaBadge({ pct, abs }: { pct: number; abs: number }) {
 // ── Scope KPI card ─────────────────────────────────────────────────────────
 
 function ScopeCard({
-  label, sub, valA, valB, pct, colorA, colorB,
+  label, sub, valA, valB, pct, colorA, colorB, comparable = true,
 }: {
   label: string; sub: string;
   valA: number;  valB: number;
   pct: number;   colorA: string; colorB: string;
+  comparable?: boolean;
 }) {
-  const improved = valB <= valA;
+  const improved = comparable && valB <= valA;
   return (
     <Card className="overflow-hidden">
-      <div className={`h-1 ${improved ? 'bg-green-400' : 'bg-red-400'}`} />
+      <div className={`h-1 ${!comparable ? 'bg-gray-300' : improved ? 'bg-green-400' : 'bg-red-400'}`} />
       <CardContent className="pt-4 pb-4">
         <p className="text-xs font-semibold text-gray-500">{label}</p>
         <p className="text-xs text-gray-400 mb-3">{sub}</p>
@@ -64,8 +66,14 @@ function ScopeCard({
           </div>
         </div>
         <div className="mt-3 pt-3 border-t flex items-center justify-between">
-          <DeltaBadge pct={pct} abs={valB - valA} />
-          <span className="text-xs text-gray-400">{Math.abs(valB - valA).toFixed(2)} tCO2e</span>
+          {comparable ? (
+            <>
+              <DeltaBadge pct={pct} abs={valB - valA} />
+              <span className="text-xs text-gray-400">{Math.abs(valB - valA).toFixed(2)} tCO2e</span>
+            </>
+          ) : (
+            <span className="text-xs text-gray-500">Няма данни за сравнение</span>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -106,8 +114,13 @@ export default function ComparisonPage() {
       if (res.ok) {
         const result = await res.json();
         setData(result.data);
+      } else {
+        setData(null);
+        toast.error('Грешка при зареждане на сравнението');
       }
-    } catch { /* silent */ }
+    } catch {
+      toast.error('Грешка при зареждане на сравнението');
+    }
     finally { setLoading(false); }
   };
 
@@ -184,10 +197,12 @@ export default function ComparisonPage() {
           </div>
         )}
 
-        {!loading && data && (
+        {!loading && data && (() => {
+          const yearBEmpty = data.totalB === 0;
+          return (
           <>
             {/* ── Grand total banner ── */}
-            <Card className={`border-2 ${data.deltaTotal <= 0 ? 'border-green-200 bg-green-50' : 'border-red-100 bg-red-50'}`}>
+            <Card className={`border-2 ${yearBEmpty ? 'border-gray-200 bg-gray-50' : data.deltaTotal <= 0 ? 'border-green-200 bg-green-50' : 'border-red-100 bg-red-50'}`}>
               <CardContent className="py-5">
                 <div className="flex items-center justify-between flex-wrap gap-4">
                   <div>
@@ -195,20 +210,29 @@ export default function ComparisonPage() {
                     <div className="flex items-baseline gap-3 mt-1">
                       <span className="text-3xl font-bold text-gray-400 line-through">{data.totalA.toFixed(2)}</span>
                       <ArrowRight className="h-5 w-5 text-gray-400" />
-                      <span className={`text-3xl font-bold ${data.totalB <= data.totalA ? 'text-green-600' : 'text-red-500'}`}>
+                      <span className={`text-3xl font-bold ${yearBEmpty ? 'text-gray-700' : data.totalB <= data.totalA ? 'text-green-600' : 'text-red-500'}`}>
                         {data.totalB.toFixed(2)}
                       </span>
                       <span className="text-sm text-gray-400">tCO2e</span>
                     </div>
                   </div>
                   <div className="text-right">
-                    <DeltaBadge pct={data.pctTotal} abs={data.deltaTotal} />
-                    <p className="text-2xl font-bold mt-1 text-gray-700">
-                      {data.deltaTotal > 0 ? '+' : ''}{data.deltaTotal.toFixed(2)} tCO2e
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      {data.deltaTotal <= 0 ? 'Намаляване' : 'Увеличение'} {data.yearA} → {data.yearB}
-                    </p>
+                    {yearBEmpty ? (
+                      <>
+                        <p className="text-sm font-semibold text-gray-700">Няма регистрирани емисии за {data.yearB} г.</p>
+                        <p className="text-xs text-gray-500 mt-1">Нулата не е намаление — липсват въведени данни</p>
+                      </>
+                    ) : (
+                      <>
+                        <DeltaBadge pct={data.pctTotal} abs={data.deltaTotal} />
+                        <p className="text-2xl font-bold mt-1 text-gray-700">
+                          {data.deltaTotal > 0 ? '+' : ''}{data.deltaTotal.toFixed(2)} tCO2e
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          {data.deltaTotal <= 0 ? 'Намаляване' : 'Увеличение'} {data.yearA} → {data.yearB}
+                        </p>
+                      </>
+                    )}
                   </div>
                 </div>
               </CardContent>
@@ -219,17 +243,20 @@ export default function ComparisonPage() {
               <ScopeCard
                 label="Обхват 1"   sub="Директни горива / флот"
                 valA={data.scope1A} valB={data.scope1B} pct={data.pct1}
-                colorA="text-gray-600" colorB={data.scope1B <= data.scope1A ? 'text-green-600' : 'text-red-500'}
+                colorA="text-gray-600" colorB={yearBEmpty ? 'text-gray-700' : data.scope1B <= data.scope1A ? 'text-green-600' : 'text-red-500'}
+                comparable={!yearBEmpty}
               />
               <ScopeCard
                 label="Обхват 2"   sub="Закупена енергия"
                 valA={data.scope2A} valB={data.scope2B} pct={data.pct2}
-                colorA="text-gray-600" colorB={data.scope2B <= data.scope2A ? 'text-green-600' : 'text-red-500'}
+                colorA="text-gray-600" colorB={yearBEmpty ? 'text-gray-700' : data.scope2B <= data.scope2A ? 'text-green-600' : 'text-red-500'}
+                comparable={!yearBEmpty}
               />
               <ScopeCard
                 label="Обхват 3"   sub="Верига на стойността"
                 valA={data.scope3A} valB={data.scope3B} pct={data.pct3}
-                colorA="text-gray-600" colorB={data.scope3B <= data.scope3A ? 'text-green-600' : 'text-red-500'}
+                colorA="text-gray-600" colorB={yearBEmpty ? 'text-gray-700' : data.scope3B <= data.scope3A ? 'text-green-600' : 'text-red-500'}
+                comparable={!yearBEmpty}
               />
             </div>
 
@@ -324,7 +351,9 @@ export default function ComparisonPage() {
                   <div>
                     <p className="font-semibold text-blue-800 mb-1">Най-голямо намаление</p>
                     <p className="text-blue-700">
-                      {data.pct1 <= data.pct2 && data.pct1 <= data.pct3
+                      {data.totalB === 0
+                        ? `Няма данни за ${data.yearB} г.`
+                        : data.pct1 <= data.pct2 && data.pct1 <= data.pct3
                         ? `Обхват 1: ${data.pct1.toFixed(1)}%`
                         : data.pct2 <= data.pct3
                           ? `Обхват 2: ${data.pct2.toFixed(1)}%`
@@ -335,7 +364,9 @@ export default function ComparisonPage() {
                   <div>
                     <p className="font-semibold text-blue-800 mb-1">Тренд на намаление</p>
                     <p className="text-blue-700">
-                      {data.pctTotal < 0
+                      {data.totalB === 0
+                        ? `Няма емисии за ${data.yearB} г. — сравнението не е показателно`
+                        : data.pctTotal < 0
                         ? `↓ ${Math.abs(data.pctTotal).toFixed(1)}% подобрение — добър прогрес`
                         : data.pctTotal === 0
                           ? 'Без промяна спрямо предходната година'
@@ -346,7 +377,9 @@ export default function ComparisonPage() {
                   <div>
                     <p className="font-semibold text-blue-800 mb-1">SBTi 4.2% цел</p>
                     <p className="text-blue-700">
-                      {data.pctTotal <= -4.2
+                      {data.totalB === 0
+                        ? `Нужни са данни за ${data.yearB} г. преди оценка спрямо SBTi`
+                        : data.pctTotal <= -4.2
                         ? '✓ Годишното намаление надвишава SBTi прага'
                         : `Нужно намаление: ${(4.2 + data.pctTotal).toFixed(1)}% допълнително`
                       }
@@ -356,7 +389,8 @@ export default function ComparisonPage() {
               </CardContent>
             </Card>
           </>
-        )}
+          );
+        })()}
 
         {!loading && !data && (
           <Card>

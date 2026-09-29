@@ -85,6 +85,7 @@ interface EmissionTarget {
   current_value: number;
   status: 'active' | 'achieved' | 'missed' | 'cancelled';
   created_at: string;
+  has_current_measurement?: boolean;
 }
 
 const TARGET_TYPE_LABELS = {
@@ -1029,6 +1030,7 @@ export default function TargetsPage() {
 
   // ── Progress calculation (month-precise) ─────────────────────────────────
   const calculateProgress = (target: EmissionTarget) => {
+    const measured     = target.has_current_measurement !== false;
     const now          = new Date();
     const cy           = now.getFullYear();
     const cm           = now.getMonth();
@@ -1043,6 +1045,19 @@ export default function TargetsPage() {
 
     let emissionProgress = 0;
     let reduction        = 0;
+    if (!measured) {
+      return {
+        progress: 0,
+        reduction: 0,
+        timeProgress,
+        monthsPassed,
+        totalMonths,
+        isOnTrack: false,
+        yearsPassed: Math.floor(monthsPassed / 12),
+        totalYears: Math.floor(totalMonths / 12),
+        measured: false,
+      };
+    }
     if (target.target_type === 'percentage') {
       reduction        = ((target.baseline_value - target.current_value) / target.baseline_value) * 100;
       emissionProgress = (reduction / target.target_value) * 100;
@@ -1064,15 +1079,17 @@ export default function TargetsPage() {
       isOnTrack,
       yearsPassed: Math.floor(monthsPassed / 12),
       totalYears:  Math.floor(totalMonths / 12),
+      measured: true,
     };
   };
 
   // ── Portfolio summary stats ───────────────────────────────────────────────
   const activeTargets  = targets.filter(t => t.status === 'active');
-  const onTrackCount   = activeTargets.filter(t => calculateProgress(t).isOnTrack).length;
+  const measuredActive = activeTargets.filter(t => calculateProgress(t).measured);
+  const onTrackCount   = measuredActive.filter(t => calculateProgress(t).isOnTrack).length;
   const achievedCount  = targets.filter(t => t.status === 'achieved').length;
-  const avgProgress    = activeTargets.length > 0
-    ? activeTargets.reduce((s, t) => s + calculateProgress(t).progress, 0) / activeTargets.length
+  const avgProgress    = measuredActive.length > 0
+    ? measuredActive.reduce((s, t) => s + calculateProgress(t).progress, 0) / measuredActive.length
     : 0;
 
   if (loading) {
@@ -1293,14 +1310,14 @@ export default function TargetsPage() {
         {targets.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <KpiCard label="Активни цели"    value={activeTargets.length.toString()}        color="bg-blue-50"   />
-            <KpiCard label="В графика"        value={`${onTrackCount} / ${activeTargets.length}`} color="bg-green-50"  sub={activeTargets.length > 0 ? `${Math.round((onTrackCount / activeTargets.length) * 100)}% успеваемост` : undefined} />
+            <KpiCard label="В графика"        value={measuredActive.length > 0 ? `${onTrackCount} / ${measuredActive.length}` : '—'} color="bg-green-50"  sub={measuredActive.length > 0 ? `${Math.round((onTrackCount / measuredActive.length) * 100)}% успеваемост` : 'няма измерване'} />
             <KpiCard label="Постигнати"       value={achievedCount.toString()}              color="bg-earth-50"  />
-            <KpiCard label="Среден прогрес"   value={`${avgProgress.toFixed(0)}%`}          color="bg-purple-50" sub="на емисиите" />
+            <KpiCard label="Среден прогрес"   value={measuredActive.length > 0 ? `${avgProgress.toFixed(0)}%` : '—'} color="bg-purple-50" sub={measuredActive.length > 0 ? 'на емисиите' : 'няма измерване'} />
           </div>
         )}
 
         {/* ── Off-Track Alerts ── */}
-        {activeTargets.some(t => !calculateProgress(t).isOnTrack) && (
+        {activeTargets.some(t => { const p = calculateProgress(t); return p.measured && !p.isOnTrack; }) && (
           <Card className="border-amber-300 bg-amber-50">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-amber-800">
@@ -1310,8 +1327,8 @@ export default function TargetsPage() {
             <CardContent>
               <div className="space-y-3">
                 {activeTargets.map(target => {
-                  const { progress, timeProgress, isOnTrack } = calculateProgress(target);
-                  if (isOnTrack) return null;
+                  const { progress, timeProgress, isOnTrack, measured } = calculateProgress(target);
+                  if (!measured || isOnTrack) return null;
                   return (
                     <div key={target.id} className="flex items-start gap-3 p-3 bg-white rounded-lg border border-amber-200">
                       <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
@@ -1337,7 +1354,7 @@ export default function TargetsPage() {
         {targets.length > 0 ? (
           <div className="grid gap-6">
             {targets.map(target => {
-              const { progress, reduction, timeProgress, isOnTrack, monthsPassed, totalMonths } = calculateProgress(target);
+              const { progress, reduction, timeProgress, isOnTrack, monthsPassed, totalMonths, measured } = calculateProgress(target);
               const StatusIcon   = STATUS_CONFIG[target.status].icon;
               const fc           = forecasts[target.id];
               const fcLoading    = loadingForecast[target.id];
@@ -1358,6 +1375,7 @@ export default function TargetsPage() {
                     target.status === 'achieved' ? 'bg-green-500' :
                     target.status === 'missed'   ? 'bg-red-500' :
                     target.status === 'cancelled'? 'bg-gray-400' :
+                    !measured ? 'bg-gray-300' :
                     isOnTrack ? 'bg-earth-400' : 'bg-amber-500'
                   }`} />
 
@@ -1415,8 +1433,8 @@ export default function TargetsPage() {
                       </div>
                       <div className="text-center p-3 bg-blue-50 rounded-lg">
                         <p className="text-xs text-gray-500">Текуща</p>
-                        <p className="text-lg font-bold text-blue-600">{target.current_value.toFixed(2)}</p>
-                        <p className="text-xs text-gray-400">tCO2e</p>
+                        <p className="text-lg font-bold text-blue-600">{measured ? target.current_value.toFixed(2) : '—'}</p>
+                        <p className="text-xs text-gray-400">{measured ? 'tCO2e' : 'няма данни'}</p>
                       </div>
                       <div className="text-center p-3 bg-earth-50 rounded-lg">
                         <p className="text-xs text-gray-500">Цел ({target.target_year})</p>
@@ -1429,19 +1447,19 @@ export default function TargetsPage() {
                             : 'tCO2e'}
                         </p>
                       </div>
-                      <div className={`text-center p-3 rounded-lg ${isOnTrack ? 'bg-green-50' : 'bg-amber-50'}`}>
+                      <div className={`text-center p-3 rounded-lg ${!measured ? 'bg-gray-50' : isOnTrack ? 'bg-green-50' : 'bg-amber-50'}`}>
                         <p className="text-xs text-gray-500">Прогрес</p>
-                        <p className={`text-lg font-bold ${isOnTrack ? 'text-green-600' : 'text-amber-600'}`}>
-                          {progress.toFixed(0)}%
+                        <p className={`text-lg font-bold ${!measured ? 'text-gray-500' : isOnTrack ? 'text-green-600' : 'text-amber-600'}`}>
+                          {measured ? `${progress.toFixed(0)}%` : '—'}
                         </p>
-                        <p className="text-xs text-gray-400">Время: {timeProgress.toFixed(0)}%</p>
+                        <p className="text-xs text-gray-400">{measured ? `Време: ${timeProgress.toFixed(0)}%` : 'няма измерване'}</p>
                       </div>
                       <div className="text-center p-3 bg-purple-50 rounded-lg">
                         <p className="text-xs text-gray-500">Нужно / год</p>
                         <p className="text-lg font-bold text-purple-600">
-                          {annualNeeded > 0 ? `-${annualNeeded.toFixed(2)}` : '✓'}
+                          {!measured ? '—' : annualNeeded > 0 ? `-${annualNeeded.toFixed(2)}` : '✓'}
                         </p>
-                        <p className="text-xs text-gray-400">{annualNeeded > 0 ? 'tCO2e' : 'постигнато'}</p>
+                        <p className="text-xs text-gray-400">{!measured ? 'няма данни' : annualNeeded > 0 ? 'tCO2e' : 'постигнато'}</p>
                       </div>
                     </div>
 
@@ -1450,8 +1468,10 @@ export default function TargetsPage() {
                       <div>
                         <div className="flex justify-between mb-1">
                           <span className="text-xs text-gray-600">Намаляване на емисии</span>
-                          <span className={`text-xs font-medium ${isOnTrack ? 'text-green-600' : 'text-amber-600'}`}>
-                            {progress.toFixed(1)}% {isOnTrack ? '✓ В графика' : '⚠ Изоставане'}
+                          <span className={`text-xs font-medium ${!measured ? 'text-gray-500' : isOnTrack ? 'text-green-600' : 'text-amber-600'}`}>
+                            {measured
+                              ? `${progress.toFixed(1)}% ${isOnTrack ? '✓ В графика' : '⚠ Изоставане'}`
+                              : 'Няма данни за текущата година'}
                           </span>
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-3">

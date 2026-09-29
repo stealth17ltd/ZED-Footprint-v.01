@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { yearMeasurementFlags } from '@/lib/carbon/footprint-service';
 import { z } from 'zod';
 
 const createTargetSchema = z.object({
@@ -47,7 +48,24 @@ export async function GET(request: Request) {
 
     if (error) throw error;
 
-    return NextResponse.json({ data });
+    let targets = data ?? [];
+    if (userData.company_id && userData.role !== 'admin') {
+      const flags = await yearMeasurementFlags(
+        supabase,
+        userData.company_id,
+        new Date().getFullYear(),
+      );
+      targets = targets.map((target) => ({
+        ...target,
+        has_current_measurement:
+          target.scope === 1 ? flags.scope1
+          : target.scope === 2 ? flags.scope2
+          : target.scope === 3 ? flags.scope3
+          : flags.all,
+      }));
+    }
+
+    return NextResponse.json({ data: targets });
   } catch (error) {
     console.error('Error fetching targets:', error);
     return NextResponse.json(

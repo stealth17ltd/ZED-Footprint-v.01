@@ -324,7 +324,9 @@ export default function ClassifyPage() {
                     Класифицирайте транзакциите
                   </h3>
                   <p className="text-sm text-orange-700">
-                    Имате {transactions.length} некласифицирани транзакции. Присвоете им категории на Обхват 3, 
+                    {transactions.length === 1
+                      ? 'Имате 1 некласифицирана транзакция. Присвоете ѝ категория на Обхват 3,'
+                      : `Имате ${transactions.length} некласифицирани транзакции. Присвоете им категории на Обхват 3,`} 
                     за да изчислите вашите емисии от стойностната верига.
                   </p>
                 </div>
@@ -358,7 +360,9 @@ export default function ClassifyPage() {
                   <div>
                     <CardTitle>Некласифицирани транзакции</CardTitle>
                     <CardDescription>
-                      {transactions.length} транзакции изчакват класификация
+                      {transactions.length === 1
+                        ? '1 транзакция изчаква класификация'
+                        : `${transactions.length} транзакции изчакват класификация`}
                     </CardDescription>
                   </div>
                   {transactions.length > 0 && (

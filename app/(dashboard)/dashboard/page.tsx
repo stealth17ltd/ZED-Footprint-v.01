@@ -54,16 +54,16 @@ export default async function DashboardPage({
   const supabase = await createClient();
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!session) redirect('/login');
+  if (!user) redirect('/login');
 
   // Fetch user + company
   const { data: userData } = await supabase
     .from('users')
     .select('*, company:companies(*)')
-    .eq('id', session.user.id)
+    .eq('id', user.id)
     .single();
 
   // Fetch all emission data for this company
@@ -135,8 +135,7 @@ export default async function DashboardPage({
   const yoyScope2 = fairYoY.scope2ChangePercent;
   const prevTotal = fairYoY.previous.total;
 
-  // Legacy filter for charts (Scope 1+2 monthly — unchanged)
-  const ytdData = emissionsData.filter(
+  const yearRows = emissionsData.filter(
     (i) => new Date(i.reporting_period).getFullYear() === selectedYear,
   );
 
@@ -147,15 +146,13 @@ export default async function DashboardPage({
       ? parseFloat((ytdTotal / employeeCount).toFixed(3))
       : null;
 
-  // Category breakdown (all time for chart)
-  const categoryTotals = emissionsData.reduce((acc: any, item) => {
+  const categoryTotals = yearRows.reduce((acc: any, item) => {
     const cat = item.category || 'other';
     acc[cat] = (acc[cat] || 0) + (item.calculated_co2e || 0);
     return acc;
   }, {});
 
-  // Monthly chart data (last 12 months)
-  const monthlyMap = emissionsData.reduce((acc: any, item) => {
+  const monthlyMap = yearRows.reduce((acc: any, item) => {
     const month = new Date(item.reporting_period).toLocaleString('bg-BG', {
       year: 'numeric',
       month: 'short',
@@ -166,12 +163,11 @@ export default async function DashboardPage({
     acc[month].total += item.calculated_co2e || 0;
     return acc;
   }, {});
-  const chartData = (Object.values(monthlyMap) as any[]).reverse().slice(-12);
+  const chartData = (Object.values(monthlyMap) as any[]).reverse();
 
-  const hasData = ytdTotal > 0 || emissionsData.length > 0;
+  const hasData = ytdTotal > 0 || yearRows.length > 0;
 
-  // Recent entries
-  const recentEmissions = emissionsData.slice(0, 5);
+  const recentEmissions = yearRows.slice(0, 5);
 
   // ── Scope 3 summary ─────────────────────────────────────────────────────────
   let scope3Summary: {
@@ -233,10 +229,30 @@ export default async function DashboardPage({
     }
   }
 
+  const inventoriesMatch =
+    !(
+      fairYoY.previous.total > 0 &&
+      fairYoY.previous.scope1 === 0 &&
+      fairYoY.previous.scope2 === 0 &&
+      (ytdScope1 > 0 || ytdScope2 > 0)
+    );
+
   // ── Insight sentence ─────────────────────────────────────────────────────────
   type InsightType = 'good' | 'warn' | 'neutral';
   const insight: { text: string; type: InsightType } | null = (() => {
-    if (!hasData) return null;
+    if (emissionsData.length === 0 && ytdTotal === 0) return null;
+    if (ytdTotal === 0) {
+      return {
+        text: `Няма регистрирани емисии за ${selectedYear} г. — въведете данни за сравнение с ${prevYear} г.`,
+        type: 'neutral',
+      };
+    }
+    if (yoyTotal !== null && !inventoriesMatch) {
+      return {
+        text: `${selectedYear} г. включва Обхват 1 и 2, които липсват през ${prevYear} г. Процентът спрямо ${prevYear} г. не е съпоставим.`,
+        type: 'neutral',
+      };
+    }
     if (yoyTotal !== null) {
       if (yoyTotal <= -5)
         return {
@@ -278,7 +294,7 @@ export default async function DashboardPage({
         ? TrendingUp
         : Minus;
 
-  const deltaLabel = prevTotal > 0 ? `vs ${prevYear}` : undefined;
+  const deltaLabel = prevTotal > 0 && inventoriesMatch ? `vs ${prevYear}` : undefined;
 
   // Scope 3 card subtitle & link (year-aware)
   const scope3Subtitle = (() => {
@@ -286,7 +302,10 @@ export default async function DashboardPage({
       return `${scope3Summary.calculations} изчисления · виж детайли`;
     }
     if (scope3Summary.unclassified_count > 0) {
-      return `${scope3Summary.unclassified_count} некласифицирани · класифицирай`;
+      const count = scope3Summary.unclassified_count;
+      return count === 1
+        ? '1 некласифицирана · класифицирай'
+        : `${count} некласифицирани · класифицирай`;
     }
     if (scope3Summary.year_txn_count > 0) {
       return `${scope3Summary.year_txn_count} транзакции · изчисли`;
@@ -349,8 +368,8 @@ export default async function DashboardPage({
             tooltip="Общият въглероден отпечатък за избраната година (Обхват 1 + 2 + 3). Измерен в tCO₂e."
             iconBgClass="bg-[#C5E1A5]/30"
             colorClass="text-earth-400"
-            delta={yoyTotal}
-            deltaLabel={deltaLabel}
+            delta={ytdTotal > 0 && inventoriesMatch ? yoyTotal : null}
+            deltaLabel={ytdTotal > 0 && inventoriesMatch ? deltaLabel : undefined}
             highlight
             emptyLabel={!hasData ? 'Все още няма данни' : undefined}
           />
@@ -363,8 +382,8 @@ export default async function DashboardPage({
             tooltip="Директни емисии от собствени източници: превозни средства, гориво, хладилни агенти."
             iconBgClass="bg-orange-50"
             colorClass="text-orange-600"
-            delta={yoyScope1}
-            deltaLabel={deltaLabel}
+            delta={ytdTotal > 0 && inventoriesMatch ? yoyScope1 : null}
+            deltaLabel={ytdTotal > 0 && inventoriesMatch ? deltaLabel : undefined}
             showProgress
             totalForPercentage={ytdTotal > 0 ? ytdTotal : undefined}
           />
@@ -377,8 +396,8 @@ export default async function DashboardPage({
             tooltip="Индиректни емисии от закупена енергия: електричество, централно отопление и охлаждане."
             iconBgClass="bg-blue-50"
             colorClass="text-blue-600"
-            delta={yoyScope2}
-            deltaLabel={deltaLabel}
+            delta={ytdTotal > 0 && inventoriesMatch ? yoyScope2 : null}
+            deltaLabel={ytdTotal > 0 && inventoriesMatch ? deltaLabel : undefined}
             showProgress
             totalForPercentage={ytdTotal > 0 ? ytdTotal : undefined}
           />
@@ -391,7 +410,7 @@ export default async function DashboardPage({
             tooltip="Индиректни емисии по веригата на стойността: закупени стоки, транспорт, бизнес пътувания и др."
             iconBgClass="bg-emerald-50"
             colorClass="text-emerald-600"
-            subtitle={scope3Subtitle}
+            subtitle={yearFootprint.scope3 > 0 ? scope3Subtitle : undefined}
             href={scope3Href}
             emptyLabel={yearFootprint.scope3 === 0 ? scope3Subtitle : undefined}
           />
@@ -438,7 +457,7 @@ export default async function DashboardPage({
                     <BarChart3 className="h-4 w-4 text-earth-400" />
                     Месечни емисии
                   </CardTitle>
-                  <CardDescription>Последните 12 месеца</CardDescription>
+                  <CardDescription>Месеци с данни през {selectedYear} г.</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <EmissionsChart data={chartData} />
@@ -486,7 +505,7 @@ export default async function DashboardPage({
                       Тенденция на емисиите
                     </CardTitle>
                     <CardDescription>
-                      Месечно разпределение на Обхват 1 и Обхват 2
+                      Месечно разпределение на Обхват 1 и Обхват 2 за {selectedYear} г.
                     </CardDescription>
                   </div>
                   <InfoTooltip content="Зелената зона е Обхват 1 (директни), синята е Обхват 2 (индиректни)." />
@@ -503,7 +522,7 @@ export default async function DashboardPage({
                 <div className="flex items-center justify-between">
                   <div>
                     <CardTitle className="text-base">Последни записи</CardTitle>
-                    <CardDescription>Най-новите {recentEmissions.length} записа</CardDescription>
+                    <CardDescription>Най-новите {recentEmissions.length} записа за {selectedYear} г.</CardDescription>
                   </div>
                   <Link
                     href="/data-entry/list"
@@ -545,6 +564,17 @@ export default async function DashboardPage({
               </CardContent>
             </Card>
           </>
+        ) : emissionsData.length > 0 ? (
+          <Card>
+            <CardContent className="py-10 text-center space-y-3">
+              <p className="text-sm text-gray-600">
+                Няма записи за {selectedYear} г. Графиките се показват след първото въвеждане за годината.
+              </p>
+              <Link href="/data-entry" className="inline-flex items-center gap-1 text-sm font-semibold text-earth-400 hover:text-earth-500">
+                Въведете данни <ArrowRight className="h-4 w-4" />
+              </Link>
+            </CardContent>
+          </Card>
         ) : (
           /* ── Empty state ── */
           <div className="space-y-4">

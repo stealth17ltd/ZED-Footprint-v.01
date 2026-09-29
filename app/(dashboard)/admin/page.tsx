@@ -9,10 +9,10 @@ export default async function AdminDashboardPage() {
   const supabase = await createClient();
   
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!session) {
+  if (!user) {
     redirect('/login');
   }
 
@@ -20,7 +20,7 @@ export default async function AdminDashboardPage() {
   const { data: userData } = await supabase
     .from('users')
     .select('role, first_name')
-    .eq('id', session.user.id)
+    .eq('id', user.id)
     .single();
 
   if (userData?.role !== 'admin') {

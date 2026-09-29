@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { getCompanyFootprint } from '@/lib/carbon/footprint-service';
+import { getCompanyFootprint, yearMeasurementFlags } from '@/lib/carbon/footprint-service';
 
 /**
  * Syncs emission targets with actual emission data
@@ -33,7 +33,10 @@ export async function POST(request: Request) {
     // Calculate how many months have passed in the current year
     const monthsPassedThisYear = currentMonth + 1;
 
-    const ytdFootprint = await getCompanyFootprint(supabase, userData.company_id, currentYear);
+    const [ytdFootprint, measured] = await Promise.all([
+      getCompanyFootprint(supabase, userData.company_id, currentYear),
+      yearMeasurementFlags(supabase, userData.company_id, currentYear),
+    ]);
 
     const projectionFactor = monthsPassedThisYear > 0 ? 12 / monthsPassedThisYear : 1;
     const totalEmissions  = ytdFootprint.total  * projectionFactor;
@@ -53,6 +56,15 @@ export async function POST(request: Request) {
     // Update each target's current_value
     const updates = [];
     for (const target of targets || []) {
+      const hasMeasurement =
+        target.scope === 1 ? measured.scope1
+        : target.scope === 2 ? measured.scope2
+        : target.scope === 3 ? measured.scope3
+        : measured.all;
+
+      // Missing rows are not a real zero. Writing 0 marks the target as achieved.
+      if (!hasMeasurement) continue;
+
       let currentValue = totalEmissions;
       
       // If target is scope-specific, use that scope's total

@@ -63,7 +63,18 @@ function LoginForm() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-earth-50 to-earth-100 p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-earth-50 to-earth-100 p-4 gap-8">
+      <div className="w-full max-w-3xl px-2">
+        <Image
+          src="/viz_zed-nobg.png"
+          alt="Съфинансирано от Европейския съюз — Програма „Конкурентоспособност и иновации в предприятията“ 2021–2027"
+          width={1600}
+          height={280}
+          className="w-full h-auto object-contain"
+          priority
+        />
+      </div>
+
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1 text-center">
           <div className="flex justify-center">

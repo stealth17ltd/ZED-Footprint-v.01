@@ -3,7 +3,43 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getSupabaseAnonKey, getSupabaseUrl } from '@/lib/supabase/env';
 
+const PUBLIC_PATHS = ['/login', '/forgot-password', '/reset-password', '/auth/callback'];
+
+function isPublicPath(pathname: string): boolean {
+  return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
+function hasSupabaseAuthCookie(req: NextRequest): boolean {
+  return req.cookies.getAll().some(
+    (cookie) => cookie.name.includes('-auth-token') && !cookie.name.includes('code-verifier'),
+  );
+}
+
+/** Edge fetch that never throws — failed network becomes 503 so Auth can settle. */
+const edgeFetch: typeof fetch = async (input, init) => {
+  try {
+    return await fetch(input, init);
+  } catch {
+    return new Response(JSON.stringify({ error: 'auth_unreachable' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+};
+
 export async function middleware(req: NextRequest) {
+  const pathname = req.nextUrl.pathname;
+  const publicRoute = isPublicPath(pathname);
+
+  // No session cookie: skip Auth entirely. Visiting /login must not call Supabase
+  // (stale cookies are the usual cause of "fetch failed" spam in Edge middleware).
+  if (!hasSupabaseAuthCookie(req)) {
+    if (publicRoute) {
+      return NextResponse.next({ request: req });
+    }
+    return NextResponse.redirect(new URL('/login', req.url));
+  }
+
   let supabaseResponse = NextResponse.next({ request: req });
 
   const supabase = createServerClient(
@@ -22,31 +58,35 @@ export async function middleware(req: NextRequest) {
           );
         },
       },
+      global: { fetch: edgeFetch },
+      auth: {
+        autoRefreshToken: false,
+        persistSession: true,
+        detectSessionInUrl: false,
+      },
     },
   );
 
-  // Validate session server-side (getUser verifies JWT with Supabase — safer than getSession)
   let user = null;
   try {
     const { data } = await supabase.auth.getUser();
     user = data?.user ?? null;
   } catch {
-    // Supabase unreachable — treat as unauthenticated
+    user = null;
   }
 
-  const pathname = req.nextUrl.pathname;
-  const publicPaths = ['/login', '/forgot-password', '/reset-password', '/auth/callback'];
-  const isPublicPath = publicPaths.some((p) => pathname === p || pathname.startsWith(`${p}/`));
-  const isLoginPath = pathname.startsWith('/login');
-
-  if (!user && !isPublicPath) {
+  if (!user && !publicRoute) {
     const loginUrl = new URL('/login', req.url);
-    return NextResponse.redirect(loginUrl);
+    const response = NextResponse.redirect(loginUrl);
+    // Drop unusable session cookies so the next /login request does not retry Auth.
+    req.cookies.getAll()
+      .filter((c) => c.name.includes('-auth-token'))
+      .forEach((c) => response.cookies.delete(c.name));
+    return response;
   }
 
-  if (user && isLoginPath) {
-    const dashboardUrl = new URL('/dashboard', req.url);
-    return NextResponse.redirect(dashboardUrl);
+  if (user && pathname.startsWith('/login')) {
+    return NextResponse.redirect(new URL('/dashboard', req.url));
   }
 
   return supabaseResponse;

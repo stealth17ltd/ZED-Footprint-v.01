@@ -90,10 +90,19 @@ export async function GET(request: Request) {
   try {
     const supabase = await createClient();
     
-    // Verify authentication
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: 'Неоторизиран достъп' }, { status: 401 });
+    }
+
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (userError || userData?.role !== 'admin') {
+      return NextResponse.json({ error: 'Нямате права за тази операция' }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -101,7 +110,8 @@ export async function GET(request: Request) {
     const limit = parseInt(searchParams.get('limit') || '10');
     const offset = (page - 1) * limit;
 
-    const { data, error, count } = await supabase
+    const serviceSupabase = createServiceClient();
+    const { data, error, count } = await serviceSupabase
       .from('companies')
       .select('*', { count: 'exact' })
       .eq('is_active', true)

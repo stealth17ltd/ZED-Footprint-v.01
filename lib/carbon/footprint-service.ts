@@ -126,6 +126,24 @@ export async function fetchScope3Rows(
   return filterScope3ByMonth(data ?? [], throughMonth);
 }
 
+/** True when the year has stored activity rows, so a zero total is measured rather than missing. */
+export async function yearMeasurementFlags(
+  supabase: SupabaseClient,
+  companyId: string,
+  year: number,
+): Promise<{ all: boolean; scope1: boolean; scope2: boolean; scope3: boolean }> {
+  const [scope12, scope3Rows] = await Promise.all([
+    fetchScope12Rows(supabase, companyId, year),
+    fetchScope3Rows(supabase, companyId, year),
+  ]);
+
+  const scope1 = scope12.some((row) => row.scope === 1);
+  const scope2 = scope12.some((row) => row.scope === 2);
+  const scope3 = scope3Rows.length > 0;
+
+  return { all: scope1 || scope2 || scope3, scope1, scope2, scope3 };
+}
+
 /**
  * Canonical annual footprint for a company (Scope 1 + 2 + 3).
  */

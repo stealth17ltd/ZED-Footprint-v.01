@@ -6,7 +6,7 @@ import {
   Building2, LayoutDashboard, LogOut, FileText, HelpCircle,
   PlusCircle, Target, Database, ChevronDown, ListChecks,
   Receipt, Tag, Upload, Zap, Leaf, Users, GitCompareArrows, ShieldCheck,
-  BookOpen, Trophy, TrendingUp, Lightbulb, Lock, FlaskConical, MapPin,
+  BookOpen, Trophy, TrendingUp, Lightbulb, Lock, FlaskConical, MapPin, Menu,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -223,6 +223,147 @@ export function AppNavLinks({ isAdmin }: { isAdmin: boolean }) {
         </>
       )}
     </nav>
+  );
+}
+
+export function AppMobileNav({ isAdmin }: { isAdmin: boolean }) {
+  const { pathname } = useNavHelpers();
+
+  const itemCls = (href: string, exact = false) =>
+    menuItemCls(exact ? pathname === href : pathname.startsWith(href));
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger className="md:hidden inline-flex items-center justify-center h-9 w-9 rounded-md text-gray-600 hover:bg-gray-50 hover:text-earth-400">
+        <Menu className="h-5 w-5" aria-hidden />
+        <span className="sr-only">Меню</span>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-64 max-h-[80vh] overflow-y-auto">
+        {isAdmin ? (
+          <>
+            <DropdownMenuItem asChild>
+              <Link href="/admin" className={itemCls('/admin', true)}>
+                <LayoutDashboard className="h-4 w-4" /> Управление
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/admin/companies" className={itemCls('/admin/companies')}>
+                <Building2 className="h-4 w-4" /> Компании
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/admin/users" className={itemCls('/admin/users')}>
+                <Users className="h-4 w-4" /> Потребители
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/data-entry/list" className={itemCls('/data-entry/list', true)}>
+                <ListChecks className="h-4 w-4 text-earth-400" /> Обхват 1 & 2 емисии
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/scope3/transactions" className={itemCls('/scope3/transactions', true)}>
+                <Receipt className="h-4 w-4 text-blue-500" /> Обхват 3 транзакции
+              </Link>
+            </DropdownMenuItem>
+          </>
+        ) : (
+          <>
+            <DropdownMenuItem asChild>
+              <Link href="/dashboard" className={itemCls('/dashboard', true)}>
+                <LayoutDashboard className="h-4 w-4" /> Управление
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/data-entry" className={itemCls('/data-entry', true)}>
+                <PlusCircle className="h-4 w-4 text-earth-400" /> Въвеждане на данни
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/data-entry/list" className={itemCls('/data-entry/list', true)}>
+                <ListChecks className="h-4 w-4 text-earth-400" /> Преглед на емисии
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/scope3/dashboard" className={itemCls('/scope3/dashboard', true)}>
+                <Leaf className="h-4 w-4 text-green-600" /> Табло Обхват 3
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/invoice-import" className={itemCls('/invoice-import', true)}>
+                <FileText className="h-4 w-4 text-blue-600" /> Импорт от фактури
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/scope3/import" className={itemCls('/scope3/import')}>
+                <Upload className="h-4 w-4 text-blue-500" /> Импорт от CSV
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/scope3/transactions" className={itemCls('/scope3/transactions', true)}>
+                <Receipt className="h-4 w-4 text-blue-500" /> Транзакции
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/scope3/classify" className={itemCls('/scope3/classify', true)}>
+                <Tag className="h-4 w-4 text-blue-500" /> Класификация
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/scope3/rules" className={itemCls('/scope3/rules', true)}>
+                <Zap className="h-4 w-4 text-purple-500" /> Правила
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/data-quality" className={itemCls('/data-quality', true)}>
+                <ShieldCheck className="h-4 w-4 text-earth-400" /> Качество на данните
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/emission-factors" className={itemCls('/emission-factors', true)}>
+                <FlaskConical className="h-4 w-4 text-violet-500" /> Емисионни фактори
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/reports" className={itemCls('/reports')}>
+                <FileText className="h-4 w-4" /> Отчети
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/targets" className={itemCls('/targets')}>
+                <Target className="h-4 w-4" /> Цели
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/strategies" className={itemCls('/strategies')}>
+                <Lightbulb className="h-4 w-4" /> Стратегии
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/comparison" className={itemCls('/comparison', true)}>
+                <GitCompareArrows className="h-4 w-4 text-blue-500" /> Сравнение
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/benchmark" className={itemCls('/benchmark', true)}>
+                <Trophy className="h-4 w-4 text-purple-500" /> Индустрия
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/vsme" className={itemCls('/vsme', true)}>
+                <BookOpen className="h-4 w-4 text-indigo-600" /> VSME
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/help" className={itemCls('/help')}>
+                <HelpCircle className="h-4 w-4" /> Помощ
+              </Link>
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

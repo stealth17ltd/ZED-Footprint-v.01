@@ -23,10 +23,10 @@ export async function GET(request: Request) {
 
     // Check authentication
     const {
-      data: { session },
-    } = await supabase.auth.getSession();
+      data: { user: authUser },
+    } = await supabase.auth.getUser();
 
-    if (!session) {
+    if (!authUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
     const { data: user } = await supabase
       .from('users')
       .select('id, company_id, role')
-      .eq('id', session.user.id)
+      .eq('id', authUser.id)
       .single();
 
     if (!user) {
@@ -95,10 +95,10 @@ export async function POST(request: Request) {
 
     // Check authentication
     const {
-      data: { session },
-    } = await supabase.auth.getSession();
+      data: { user: authUser },
+    } = await supabase.auth.getUser();
 
-    if (!session) {
+    if (!authUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -106,7 +106,7 @@ export async function POST(request: Request) {
     const { data: user } = await supabase
       .from('users')
       .select('id, company_id, role')
-      .eq('id', session.user.id)
+      .eq('id', authUser.id)
       .single();
 
     if (!user || !user.company_id) {
@@ -158,10 +158,10 @@ export async function PATCH(request: Request) {
 
     // Check authentication
     const {
-      data: { session },
-    } = await supabase.auth.getSession();
+      data: { user: authUser },
+    } = await supabase.auth.getUser();
 
-    if (!session) {
+    if (!authUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -169,7 +169,7 @@ export async function PATCH(request: Request) {
     const { data: user } = await supabase
       .from('users')
       .select('id, company_id, role')
-      .eq('id', session.user.id)
+      .eq('id', authUser.id)
       .single();
 
     if (!user || !user.company_id) {
@@ -249,10 +249,10 @@ export async function DELETE(request: Request) {
 
     // Check authentication
     const {
-      data: { session },
-    } = await supabase.auth.getSession();
+      data: { user: authUser },
+    } = await supabase.auth.getUser();
 
-    if (!session) {
+    if (!authUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -260,7 +260,7 @@ export async function DELETE(request: Request) {
     const { data: user } = await supabase
       .from('users')
       .select('id, company_id, role')
-      .eq('id', session.user.id)
+      .eq('id', authUser.id)
       .single();
 
     if (!user || !user.company_id) {

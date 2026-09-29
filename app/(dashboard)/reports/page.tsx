@@ -41,6 +41,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { formatLocalDate } from '@/lib/utils';
 
 type ReportType = 'internal' | 'full' | 'csrd' | 'compliance' | 'certificate' | 'vsme';
 
@@ -263,8 +264,8 @@ function ReportsPageInner() {
     const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
     const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
     
-    setStartDate(firstDay.toISOString().split('T')[0]);
-    setEndDate(lastDay.toISOString().split('T')[0]);
+    setStartDate(formatLocalDate(firstDay));
+    setEndDate(formatLocalDate(lastDay));
   }, []);
 
   // Load preview data whenever dates change
@@ -690,8 +691,8 @@ function ReportsPageInner() {
                       const now = new Date();
                       const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
                       const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-                      setStartDate(firstDay.toISOString().split('T')[0]);
-                      setEndDate(lastDay.toISOString().split('T')[0]);
+                      setStartDate(formatLocalDate(firstDay));
+                      setEndDate(formatLocalDate(lastDay));
                     }}
                   >
                     Текущ месец
@@ -703,8 +704,8 @@ function ReportsPageInner() {
                       const now = new Date();
                       const firstDay = new Date(now.getFullYear(), 0, 1);
                       const lastDay = new Date(now.getFullYear(), 11, 31);
-                      setStartDate(firstDay.toISOString().split('T')[0]);
-                      setEndDate(lastDay.toISOString().split('T')[0]);
+                      setStartDate(formatLocalDate(firstDay));
+                      setEndDate(formatLocalDate(lastDay));
                     }}
                   >
                     Текуща година
@@ -717,8 +718,8 @@ function ReportsPageInner() {
                       const lastYear = now.getFullYear() - 1;
                       const firstDay = new Date(lastYear, 0, 1);
                       const lastDay = new Date(lastYear, 11, 31);
-                      setStartDate(firstDay.toISOString().split('T')[0]);
-                      setEndDate(lastDay.toISOString().split('T')[0]);
+                      setStartDate(formatLocalDate(firstDay));
+                      setEndDate(formatLocalDate(lastDay));
                     }}
                   >
                     Минала година
@@ -730,8 +731,8 @@ function ReportsPageInner() {
                       const now = new Date();
                       const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, 1);
                       const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-                      setStartDate(threeMonthsAgo.toISOString().split('T')[0]);
-                      setEndDate(lastDay.toISOString().split('T')[0]);
+                      setStartDate(formatLocalDate(threeMonthsAgo));
+                      setEndDate(formatLocalDate(lastDay));
                     }}
                   >
                     Последните 3 месеца

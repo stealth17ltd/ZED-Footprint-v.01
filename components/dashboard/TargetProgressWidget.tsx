@@ -17,6 +17,7 @@ interface EmissionTarget {
   current_value: number;
   target_year: number;
   status: 'active' | 'achieved' | 'missed' | 'cancelled';
+  has_current_measurement?: boolean;
 }
 
 const SCOPE_COLORS: Record<number, string> = {
@@ -44,6 +45,7 @@ export default function TargetProgressWidget() {
   }, []);
 
   const calculateProgress = (target: EmissionTarget) => {
+    const measured = target.has_current_measurement !== false;
     const now           = new Date();
     const cy            = now.getFullYear();
     const cm            = now.getMonth();
@@ -57,6 +59,9 @@ export default function TargetProgressWidget() {
       : 0;
 
     let emissionProgress = 0;
+    if (!measured) {
+      return { progress: 0, timeProgress, isOnTrack: false, isSBTiAligned: false, yearsLeft: Math.max(0, target.target_year - cy), measured: false };
+    }
     if (target.target_type === 'percentage') {
       const reduction     = ((target.baseline_value - target.current_value) / target.baseline_value) * 100;
       emissionProgress    = (reduction / target.target_value) * 100;
@@ -79,7 +84,7 @@ export default function TargetProgressWidget() {
 
     const yearsLeft = Math.max(0, target.target_year - cy);
 
-    return { progress: emissionProgress, timeProgress, isOnTrack, isSBTiAligned, yearsLeft };
+    return { progress: emissionProgress, timeProgress, isOnTrack, isSBTiAligned, yearsLeft, measured: true };
   };
 
   if (loading) {
@@ -120,7 +125,8 @@ export default function TargetProgressWidget() {
     );
   }
 
-  const onTrackCount = targets.filter(t => calculateProgress(t).isOnTrack).length;
+  const trackedTargets = targets.filter(t => t.has_current_measurement !== false);
+  const onTrackCount = trackedTargets.filter(t => calculateProgress(t).isOnTrack).length;
 
   return (
     <Card className="border-earth-200">
@@ -132,9 +138,11 @@ export default function TargetProgressWidget() {
           </CardTitle>
           <div className="flex items-center gap-2">
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-              onTrackCount === targets.length ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+              trackedTargets.length === 0
+                ? 'bg-gray-100 text-gray-600'
+                : onTrackCount === trackedTargets.length ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
             }`}>
-              {onTrackCount}/{targets.length} в графика
+              {trackedTargets.length === 0 ? 'няма данни' : `${onTrackCount}/${trackedTargets.length} в графика`}
             </span>
             <Link href="/targets">
               <Button variant="ghost" size="sm" className="text-earth-400 hover:text-earth-500">
@@ -146,7 +154,7 @@ export default function TargetProgressWidget() {
       </CardHeader>
       <CardContent className="space-y-4">
         {targets.map(target => {
-          const { progress, timeProgress, isOnTrack, isSBTiAligned, yearsLeft } = calculateProgress(target);
+          const { progress, timeProgress, isOnTrack, isSBTiAligned, yearsLeft, measured } = calculateProgress(target);
 
           return (
             <div key={target.id} className="space-y-1.5">
@@ -163,12 +171,15 @@ export default function TargetProgressWidget() {
                   )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  {isOnTrack
-                    ? <CheckCircle className="h-4 w-4 text-green-500" />
-                    : <AlertCircle className="h-4 w-4 text-amber-500" />
-                  }
-                  <span className={`font-semibold ${isOnTrack ? 'text-green-600' : 'text-amber-600'}`}>
-                    {progress.toFixed(0)}%
+                  {measured ? (
+                    isOnTrack
+                      ? <CheckCircle className="h-4 w-4 text-green-500" />
+                      : <AlertCircle className="h-4 w-4 text-amber-500" />
+                  ) : (
+                    <AlertCircle className="h-4 w-4 text-gray-400" />
+                  )}
+                  <span className={`font-semibold ${!measured ? 'text-gray-500' : isOnTrack ? 'text-green-600' : 'text-amber-600'}`}>
+                    {measured ? `${progress.toFixed(0)}%` : '—'}
                   </span>
                 </div>
               </div>
@@ -183,17 +194,18 @@ export default function TargetProgressWidget() {
                 />
                 {/* Emission progress */}
                 <div
-                  className={`h-2.5 rounded-full transition-all ${isOnTrack ? 'bg-earth-400' : 'bg-amber-500'}`}
-                  style={{ width: `${progress}%` }}
+                  className={`h-2.5 rounded-full transition-all ${!measured ? 'bg-gray-300' : isOnTrack ? 'bg-earth-400' : 'bg-amber-500'}`}
+                  style={{ width: `${measured ? progress : 0}%` }}
                 />
               </div>
 
               <div className="flex justify-between text-xs text-gray-400">
                 <span>
-                  {target.target_type === 'percentage'
-                    ? `Цел: -${target.target_value}%`
-                    : `Цел: ${target.target_value.toFixed(1)} tCO2e`
-                  }
+                  {measured
+                    ? (target.target_type === 'percentage'
+                      ? `Цел: -${target.target_value}%`
+                      : `Цел: ${target.target_value.toFixed(1)} tCO2e`)
+                    : 'Няма данни за текущата година'}
                 </span>
                 <span className="flex items-center gap-1">
                   <Calendar className="h-3 w-3" />

@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { ZedLogo } from '@/components/ui/zed-logo';
-import { AppNavLinks, AppNavUser } from '@/components/ui/app-nav';
+import { AppNavLinks, AppNavUser, AppMobileNav } from '@/components/ui/app-nav';
 
 export default async function DashboardLayout({
   children,
@@ -42,6 +42,7 @@ export default async function DashboardLayout({
               <a href={isAdmin ? '/admin' : '/dashboard'} className="flex items-center shrink-0">
                 <ZedLogo size="lg" />
               </a>
+              <AppMobileNav isAdmin={isAdmin} />
               <div className="hidden md:block h-6 w-px bg-gray-200 shrink-0" />
               <AppNavLinks isAdmin={isAdmin} />
             </div>
